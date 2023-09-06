@@ -66,14 +66,16 @@ const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 
 
 int hours, mins, secs;
+bool isPM = false;
+
 
 OLEDDisplayUi ui ( &display );
 
 int screenW = 128;
 int screenH = 64;
 int clockCenterX = screenW / 2;
-int clockCenterY = ((screenH - 16) / 2) + 16; // top yellow part is 16 px height
-int clockRadius = 23;
+int clockCenterY = ((screenH - 16) / 2) + 18; // top yellow part is 16 px height
+int clockRadius = 22;
 
 // utility function for digital clock display: prints leading 0
 String twoDigits(int digits) {
@@ -130,10 +132,18 @@ void analogClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x
   y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 2 ) ) ) );
   display->drawLine( clockCenterX + x , clockCenterY + y , x3 + x , y3 + y);
 
-    String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs);
+    
   display->setTextAlignment(TEXT_ALIGN_CENTER);
   display->setFont(ArialMT_Plain_16);
-  display->drawString(clockCenterX + x, 0, timenow );
+      if (isPM) {
+    String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs) + " PM";
+    display->drawString(clockCenterX + x, 0, timenow );
+  } else {
+    String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs) + " AM";
+    display->drawString(clockCenterX + x, 0, timenow );
+  }
+  
+
 }
 
 void digitalClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -362,6 +372,14 @@ void loop() {
   hours = timeinfo.tm_hour;
   mins = timeinfo.tm_min;
   secs = timeinfo.tm_sec;
+    if (hours > 12) {
+    hours -= 12;
+    isPM = true;
+  } else {
+    isPM = false;
+  }
+  if (hours == 12) {isPM = true;}
+  if (hours == 0) {hours = 12;}
     delay(remainingTimeBudget);
   }
 }
