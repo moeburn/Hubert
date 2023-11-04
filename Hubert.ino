@@ -74,8 +74,8 @@ OLEDDisplayUi ui ( &display );
 int screenW = 128;
 int screenH = 64;
 int clockCenterX = screenW / 2;
-int clockCenterY = ((screenH - 16) / 2) + 18; // top yellow part is 16 px height
-int clockRadius = 22;
+int clockCenterY = ((screenH - 16) / 2) + 20; // top yellow part is 16 px height
+int clockRadius = 18;
 
 // utility function for digital clock display: prints leading 0
 String twoDigits(int digits) {
@@ -93,7 +93,7 @@ void clockOverlay(OLEDDisplay *display, OLEDDisplayUiState* state) {
 }
 
 void analogClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  //  ui.disableIndicator();
+  /*//  ui.disableIndicator();
 
   // Draw the clock face
   //  display->drawCircle(clockCenterX + x, clockCenterY + y, clockRadius);
@@ -131,18 +131,23 @@ void analogClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x
   x3 = ( clockCenterX + ( sin(angle) * ( clockRadius - ( clockRadius / 2 ) ) ) );
   y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 2 ) ) ) );
   display->drawLine( clockCenterX + x , clockCenterY + y , x3 + x , y3 + y);
-
+  */
     
   display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->setFont(ArialMT_Plain_16);
+  display->setFont(ArialMT_Plain_24);
       if (isPM) {
-    String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs) + " PM";
+    String timenow = String(hours) + ":" + twoDigits(mins) + " PM";
     display->drawString(clockCenterX + x, 0, timenow );
   } else {
-    String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs) + " AM";
+    String timenow = String(hours) + ":" + twoDigits(mins) +  " AM";
     display->drawString(clockCenterX + x, 0, timenow );
   }
-  
+  String timenow = "" + twoDigits(mins) +  " AM";
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->setFont(ArialMT_Plain_16);
+  display->drawString(0, 19, timenow );
+
+  display->drawRect(0, 0, 128, 64);
 
 }
 
@@ -356,14 +361,18 @@ void setup()
 
   // Initialising the UI will init the display too.
   ui.init();
-display.setBrightness(50);
+display.setBrightness(128);
+
 }
+
+bool isSleeping = false;
 
 
 
 void loop() {
-
+delay(100);
    int remainingTimeBudget = ui.update();
+   
 
   if (remainingTimeBudget > 0) {
     
@@ -372,6 +381,16 @@ void loop() {
   hours = timeinfo.tm_hour;
   mins = timeinfo.tm_min;
   secs = timeinfo.tm_sec;
+
+  if ((hours < 8) && (!isSleeping)){
+    display.setBrightness(0);
+    isSleeping = true;
+  }
+    if ((hours >= 8) && (isSleeping)){
+    display.setBrightness(128);
+    isSleeping = false;
+  }
+
     if (hours > 12) {
     hours -= 12;
     isPM = true;
@@ -383,3 +402,4 @@ void loop() {
     delay(remainingTimeBudget);
   }
 }
+
