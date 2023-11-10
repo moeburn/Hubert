@@ -46,13 +46,14 @@ TFT_eSprite img3 = TFT_eSprite(&tft);
 
 #define BLACK 0x0000
 #define BLUE 0x001F
-#define LIGHTRED 0xFC10
-#define LIGHTBLUE 0x841F
+#define PINK 0xFC10
+#define CYAN 0x841F
 #define RED 0xF800
 #define GREEN 0x07E0
-#define CYAN 0x07FF
+#define LIGHTBLUE 0x07FF
 #define LIGHTCYAN 0x87FF
-#define MAGENTA 0xFC3B
+#define LIGHTRED 0xFC18 
+#define MAGENTA  0xFC1F
 #define YELLOW 0xFFE0
 #define WHITE 0xFFFF
 #define GREY 0xC618
