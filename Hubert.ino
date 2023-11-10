@@ -4,7 +4,12 @@
 #include <AsyncElegantOTA.h>
 #include <StreamLib.h>
 #include "time.h"
-#include "OLEDDisplayUi.h"
+#include <Wire.h>
+#include <TFT_eSPI.h> // Hardware-specific library
+#include <SPI.h>
+#include <BlynkSimpleEsp32.h>
+
+char auth[] = "8_-CN2rm4ki9P3i_NkPhxIbCiKd5RXhK";  //BLYNK
 
 // Include custom images
 //#include "images.h"
@@ -21,55 +26,42 @@ String timerSliderValue = "50";
 AsyncWebServer server(80);
 AsyncWebServer server2(8080);
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -14400;  //Replace with your GMT offset (secs)
+const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
-// For a connection via I2C using the Arduino Wire include:
-#include <Wire.h>               // Only needed for Arduino 1.6.5 and earlier
-//#include "SSD1306Wire.h"        // legacy: #include "SSD1306.h"
-#include "SH1106Wire.h"   // legacy: #include "SH1106.h"
-
-// For a connection via I2C using brzo_i2c (must be installed) include:
-// #include <brzo_i2c.h>        // Only needed for Arduino 1.6.5 and earlier
-// #include "SSD1306Brzo.h"
-// OR #include "SH1106Brzo.h"
-
-// For a connection via SPI include:
-// #include <SPI.h>             // Only needed for Arduino 1.6.5 and earlier
-// #include "SSD1306Spi.h"
-// OR #include "SH1106SPi.h"
-
-
-// Optionally include custom images
-#include "images.h"
-
-
-// Initialize the OLED display using Arduino Wire:
-//SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usually populate automatically based on your board's pins_arduino.h e.g. https://github.com/esp8266/Arduino/blob/master/variants/nodemcu/pins_arduino.h
-// SSD1306Wire display(0x3c, D3, D5);  // ADDRESS, SDA, SCL  -  If not, they can be specified manually.
-// SSD1306Wire display(0x3c, SDA, SCL, GEOMETRY_128_32);  // ADDRESS, SDA, SCL, OLEDDISPLAY_GEOMETRY  -  Extra param required for 128x32 displays.
- SH1106Wire display(0x3c, SDA, SCL);     // ADDRESS, SDA, SCL
-
-// Initialize the OLED display using brzo_i2c:
-// SSD1306Brzo display(0x3c, D3, D5);  // ADDRESS, SDA, SCL
-// or
-// SH1106Brzo display(0x3c, D3, D5);   // ADDRESS, SDA, SCL
-
-// Initialize the OLED display using SPI:
-// D5 -> CLK
-// D7 -> MOSI (DOUT)
-// D0 -> RES
-// D2 -> DC
-// D8 -> CS
-// SSD1306Spi display(D0, D2, D8);  // RES, DC, CS
-// or
-// SH1106Spi display(D0, D2);       // RES, DC
 
 
 int hours, mins, secs;
+int brightVal;
 bool isPM = false;
 
+#define LED_PIN 13
 
-OLEDDisplayUi ui ( &display );
+
+
+
+TFT_eSPI tft = TFT_eSPI();       // Invoke custom library
+TFT_eSprite img = TFT_eSprite(&tft);
+TFT_eSprite img2 = TFT_eSprite(&tft);
+TFT_eSprite img3 = TFT_eSprite(&tft);
+
+#define BLACK 0x0000
+#define BLUE 0x001F
+#define LIGHTRED 0xFC10
+#define LIGHTBLUE 0x841F
+#define RED 0xF800
+#define GREEN 0x07E0
+#define CYAN 0x07FF
+#define LIGHTCYAN 0x87FF
+#define MAGENTA 0xFC3B
+#define YELLOW 0xFFE0
+#define WHITE 0xFFFF
+#define GREY 0xC618
+#define ORANGE 0xFE2F
+#define LIGHTGREEN 0x8F71
+
+float p = 3.1415926;
+
+
 
 int screenW = 128;
 int screenH = 64;
@@ -88,86 +80,11 @@ String twoDigits(int digits) {
   }
 }
 
-void clockOverlay(OLEDDisplay *display, OLEDDisplayUiState* state) {
 
-}
 
-void analogClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  /*//  ui.disableIndicator();
 
-  // Draw the clock face
-  //  display->drawCircle(clockCenterX + x, clockCenterY + y, clockRadius);
-  display->drawCircle(clockCenterX + x, clockCenterY + y, 2);
-  //
-  //hour ticks
-  for ( int z = 0; z < 360; z = z + 30 ) {
-    //Begin at 0° and stop at 360°
-    float angle = z ;
-    angle = ( angle / 57.29577951 ) ; //Convert degrees to radians
-    int x2 = ( clockCenterX + ( sin(angle) * clockRadius ) );
-    int y2 = ( clockCenterY - ( cos(angle) * clockRadius ) );
-    int x3 = ( clockCenterX + ( sin(angle) * ( clockRadius - ( clockRadius / 8 ) ) ) );
-    int y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 8 ) ) ) );
-    display->drawLine( x2 + x , y2 + y , x3 + x , y3 + y);
-  }
 
-  // display second hand
-  float angle = secs * 6 ;
-  angle = ( angle / 57.29577951 ) ; //Convert degrees to radians
-  int x3 = ( clockCenterX + ( sin(angle) * ( clockRadius - ( clockRadius / 5 ) ) ) );
-  int y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 5 ) ) ) );
-  //display->drawLine( clockCenterX + x , clockCenterY + y , x3 + x , y3 + y);
-  //
-  // display minute hand
-  angle = mins * 6 ;
-  angle = ( angle / 57.29577951 ) ; //Convert degrees to radians
-  x3 = ( clockCenterX + ( sin(angle) * ( clockRadius - ( clockRadius / 4 ) ) ) );
-  y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 4 ) ) ) );
-  display->drawLine( clockCenterX + x , clockCenterY + y , x3 + x , y3 + y);
-  //
-  // display hour hand
-  angle = hours * 30 + int( ( mins / 12 ) * 6 )   ;
-  angle = ( angle / 57.29577951 ) ; //Convert degrees to radians
-  x3 = ( clockCenterX + ( sin(angle) * ( clockRadius - ( clockRadius / 2 ) ) ) );
-  y3 = ( clockCenterY - ( cos(angle) * ( clockRadius - ( clockRadius / 2 ) ) ) );
-  display->drawLine( clockCenterX + x , clockCenterY + y , x3 + x , y3 + y);
-  */
-    
-  display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->setFont(ArialMT_Plain_24);
-      if (isPM) {
-    String timenow = String(hours) + ":" + twoDigits(mins) + " PM";
-    display->drawString(clockCenterX + x, 0, timenow );
-  } else {
-    String timenow = String(hours) + ":" + twoDigits(mins) +  " AM";
-    display->drawString(clockCenterX + x, 0, timenow );
-  }
-  String timenow = "" + twoDigits(mins) +  " AM";
-  display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->setFont(ArialMT_Plain_16);
-  display->drawString(0, 19, timenow );
 
-  display->drawRect(0, 0, 128, 64);
-
-}
-
-void digitalClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  String timenow = String(hours) + ":" + twoDigits(mins) + ":" + twoDigits(secs);
-  display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->setFont(ArialMT_Plain_16);
-  display->drawString(clockCenterX + x , 0, timenow );
-}
-
-// This array keeps function pointers to all frames
-// frames are the single views that slide in
-FrameCallback frames[] = { analogClockFrame, digitalClockFrame };
-
-// how many frames are there?
-int frameCount = 2;
-
-// Overlays are statically drawn on top of a frame eg. a clock
-OverlayCallback overlays[] = { clockOverlay };
-int overlaysCount = 1;
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -194,7 +111,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <body>
   <h2>ESP Web Server</h2>
   <p><span id="timerValue">%TIMERVALUE%</span> s</p>
-  <p><input type="range" onchange="updateSliderTimer(this)" id="timerSlider" min="1" max="255" value="%TIMERVALUE%" step="1" class="slider2"></p>
+  <p><input type="range" onchange="updateSliderTimer(this)" id="timerSlider" min="0" max="255" value="%TIMERVALUE%" step="1" class="slider2"></p>
   %BUTTONPLACEHOLDER%
 <script>
 function toggleCheckbox(element) {
@@ -240,156 +157,110 @@ String processor(const String& var){
 String outputState(){
   return "";
 }
- 
-void setup()
-{
-  display.init();
-
-  //display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_16);
-  Serial.begin(115200);
-
-   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  int x;
-  while (WiFi.status() != WL_CONNECTED) {
-    x+=3;
-    if (x > 128){x=0;}
-    
-    display.drawString(x, 0, ".");
-    display.display();
-    delay(250);
-  }
-    char buff[150];
- CStringBuilder sb(buff, sizeof(buff));
- sb.println(ssid);
- sb.print(WiFi.localIP());
-
-  display.clear();
-  display.drawStringMaxWidth(0, 0, 128, buff);
-  display.display();
-
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-  hours = timeinfo.tm_hour;
-  mins = timeinfo.tm_min;
-  secs = timeinfo.tm_sec;
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "Hi! I am Hubert.");
-  });
-
-  AsyncElegantOTA.begin(&server);    // Start ElegantOTA
-
-  server2.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-  });
-
-  // Send a GET request to <ESP_IP>/update?state=<inputMessage>
-  server2.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    String inputMessage;
-    // GET input1 value on <ESP_IP>/update?state=<inputMessage>
-    if (request->hasParam(PARAM_INPUT_1)) {
-      inputMessage = request->getParam(PARAM_INPUT_1)->value();
-      digitalWrite(output, inputMessage.toInt());
-    }
-    else {
-      inputMessage = "No message sent";
-    }
-    Serial.println(inputMessage);
-    request->send(200, "text/plain", "OK");
-  });
-  
-  // Send a GET request to <ESP_IP>/slider?value=<inputMessage>
-  server2.on("/slider", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    String inputMessage;
-    // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
-    if (request->hasParam(PARAM_INPUT_2)) {
-      inputMessage = request->getParam(PARAM_INPUT_2)->value();
-      display.setBrightness(inputMessage.toInt());
-      timerSliderValue = inputMessage;
-    }
-    else {
-      inputMessage = "No message sent";
-    }
-    Serial.println(inputMessage);
-    
-    request->send(200, "text/plain", "OK");
-  });
-  
-  // Start server
-  server2.begin();
-
-  server.begin();
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
-
-  
-  // Initialising the UI will init the display too.
-
-
-  delay(1500);
-
-   ui.setTargetFPS(60);
-
-  // Customize the active and inactive symbol
-  ui.setActiveSymbol(activeSymbol);
-  ui.setInactiveSymbol(inactiveSymbol);
-
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui.setIndicatorPosition(TOP);
-
-  // Defines where the first frame is located in the bar.
-  ui.setIndicatorDirection(LEFT_RIGHT);
-
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
-  ui.setFrameAnimation(SLIDE_LEFT);
-
-  // Add frames
-  ui.setFrames(frames, frameCount);
-
-  // Add overlays
-  ui.setOverlays(overlays, overlaysCount);
-  ui.disableAutoTransition();
-  ui.disableAllIndicators();
-
-  // Initialising the UI will init the display too.
-  ui.init();
-display.setBrightness(128);
-
-}
 
 bool isSleeping = false;
 
+unsigned long millisBlynk;
+
+float pm25in, pm25out, bridgetemp, bridgehum, iaq, windspeed, brtemp, brhum;
 
 
-void loop() {
-delay(100);
-   int remainingTimeBudget = ui.update();
-   
+BLYNK_WRITE(V71) {
+  pm25in = param.asFloat();
+}
+BLYNK_WRITE(V51) {
+  pm25out = param.asFloat();
+}
 
-  if (remainingTimeBudget > 0) {
-    
+BLYNK_WRITE(V62) {
+  bridgetemp = param.asFloat();
+}
+BLYNK_WRITE(V63) {
+  bridgehum = param.asFloat();
+}
+
+BLYNK_WRITE(V75) {
+  iaq = param.asFloat();
+}
+BLYNK_WRITE(V56) {
+  windspeed = param.asFloat();
+}
+BLYNK_WRITE(V72) {
+  brtemp = param.asFloat();
+}
+BLYNK_WRITE(V74) {
+  brhum = param.asFloat();
+}
+
+uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((r / 8) << 11) | ((g / 4) << 5) | (b / 8);
+}
+
+float pmR, pmG, pmB;
+float pmR2, pmG2, pmB2;
+float pmR3, pmG3, pmB3;
+
+void dodisplay() {
+  
+  pmG = 55 - pm25in;
+  if (pmG < 0) { pmG = 0; }
+  pmG *= (200.0 / 55.0);
+  if (pmG > 255) { pmG = 255; }
+
+  pmR = pm25in;
+  if (pmR < 0) { pmR = 0; }
+  pmR *= (255.0 / 55.0);
+  if (pmR > 255) { pmR = 255; }
+
+  pmB = pm25in - 100;
+  if (pmB < 0) { pmB = 0; }
+  pmB *= (255.0 / 55.0);
+  if (pmB > 255) { pmB = 255; }
+//===============================
+  pmG2 = 55 - pm25out;
+  if (pmG2 < 0) { pmG2 = 0; }
+  pmG2 *= (200.0 / 55.0);
+  if (pmG2 > 255) { pmG2 = 255; }
+
+  pmR2 = pm25out;
+  if (pmR2 < 0) { pmR2 = 0; }
+  pmR2 *= (255.0 / 55.0);
+  if (pmR2 > 255) { pmR2 = 255; }
+
+  pmB2 = pm25out - 100;
+  if (pmB2 < 0) { pmB2 = 0; }
+  pmB2 *= (255.0 / 55.0);
+  if (pmB2 > 255) { pmB2 = 255; }
+//================================
+  pmG3 = 155 - iaq;
+  if (pmG3 < 0) {pmG3 = 0;}
+  pmG3 *= (255.0/155.0);
+  if (pmG3 > 255) {pmG3 = 255;}
+  
+  pmR3 = iaq;
+  if (pmR3 < 0) {pmR3 = 0;}
+  pmR3 *= (255.0/155.0);
+  if (pmR3 > 255) {pmR3 = 255;}
+  
+  pmB3 = iaq - 155;
+  if (pmB3 < 0) {pmB3 = 0;}
+  pmB3 *= (255.0/155.0);
+  if (pmB3 > 255) {pmB3 = 255;}
+
     struct tm timeinfo;
   getLocalTime(&timeinfo);
   hours = timeinfo.tm_hour;
   mins = timeinfo.tm_min;
   secs = timeinfo.tm_sec;
 
-  if ((hours < 8) && (!isSleeping)){
-    display.setBrightness(0);
+ /* if ((hours < 8) && (!isSleeping)){
+    brightVal = 255;
     isSleeping = true;
   }
     if ((hours >= 8) && (isSleeping)){
-    display.setBrightness(128);
+    brightVal = 1;
     isSleeping = false;
-  }
+  }*/
 
     if (hours > 12) {
     hours -= 12;
@@ -399,7 +270,227 @@ delay(100);
   }
   if (hours == 12) {isPM = true;}
   if (hours == 0) {hours = 12;}
-    delay(remainingTimeBudget);
+
+  tft.setCursor(64, 1);
+  tft.setTextDatum(TC_DATUM);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
+  tft.setTextSize(3);
+
+//String timenow = String(hours) + ":" + twoDigits(mins);
+if (hours < 10) {
+  if (isPM) {
+      String timenow = String(hours) + ":" + twoDigits(mins) + " PM";
+      tft.drawString(timenow, 64, 0);
+    } 
+    else {
+      String timenow = String(hours) + ":" + twoDigits(mins) +  " AM";
+      tft.drawString(timenow, 64, 0);
+    }
+  }
+  else {
+        if (isPM) {
+      String timenow = String(hours) + ":" + twoDigits(mins) + "PM";
+      tft.drawString(timenow, 64, 0);
+    } 
+    else {
+      String timenow = String(hours) + ":" + twoDigits(mins) +  "AM";
+      tft.drawString(timenow, 64, 0);
+    }
+  }
+  img2.setCursor(0, 0);
+  img2.setTextSize(2);
+  img2.fillScreen(TFT_BLACK);
+  img2.setTextColor(LIGHTRED);
+  img2.println("iT:");
+  img2.setTextColor(LIGHTBLUE);
+  img2.println("iH:");
+  img2.setTextColor(MAGENTA);
+  img2.println("oT:");
+  img2.setTextColor(LIGHTCYAN);
+  img2.println("oH:");
+  img2.setTextColor(LIGHTGREEN);
+  img2.println("Ws:");
+  img2.pushSprite(0,27);
+
+  img.fillSprite(TFT_BLACK);
+  img.setCursor(0,0);
+  img.setTextSize(2);
+  img.setTextColor(TFT_BLUE, TFT_BLACK);
+  img.setTextDatum(TR_DATUM);
+  int ypos;
+  String stringtodraw = String(brtemp, 2) + "\367""C";
+  img.setTextColor(LIGHTRED);
+  img.drawString(stringtodraw, 90,0);
+  ypos += img.fontHeight();
+  stringtodraw = String(brhum, 2) + "g";
+  img.setTextColor(LIGHTBLUE);
+  img.drawString(stringtodraw, 90,ypos);
+  ypos += img.fontHeight();
+  stringtodraw = String(bridgetemp, 2) + "\367""C";
+  img.setTextColor(MAGENTA);
+  img.drawString(stringtodraw, 90,ypos);
+  ypos += img.fontHeight();
+  stringtodraw = String(bridgehum, 2) + "g";
+  img.setTextColor(LIGHTCYAN);
+  img.drawString(stringtodraw, 90,ypos);
+  ypos += img.fontHeight();
+  stringtodraw = String(windspeed, 1) + "kph";
+  img.setTextColor(LIGHTGREEN);
+  img.drawString(stringtodraw, 90,ypos);
+  img.pushSprite(38, 27);
+
+  img3.fillSprite(TFT_BLACK);
+  img3.setCursor(0,0);
+  img3.setTextFont(2);
+  img3.setTextSize(1);
+  img3.setTextDatum(TL_DATUM);
+ img3.setTextColor(YELLOW, RGBto565(pmR, pmG, pmB));
+  img3.drawFloat(pm25in, 1, 0, 0);
+  //img3.print(" ");
+  img3.setTextDatum(TC_DATUM);
+  //img3.setCursor(64,0);
+  img3.setTextColor(YELLOW, RGBto565(pmR2, pmG2, pmB2));
+  //if (pm25out < 10) {img3.print(" ");}
+  //if (pm25in >= 10) {img3.print(pm25out, 1);} else {img3.print(pm25out, 2);}
+  img3.drawFloat(pm25out, 1, 64, 0);
+  img3.setTextDatum(TR_DATUM);
+  //img3.setCursor(128,0);
+  img3.setTextColor(YELLOW, RGBto565(pmR3, pmG3, pmB3));
+  img3.drawFloat(iaq, 1, 128, 0);
+  //img3.print(iaq);
+  img3.pushSprite(0, 107);
+}
+ 
+void setup()
+{
+  pinMode(LED_PIN, OUTPUT);
+  pm25in = pm25out = bridgetemp = bridgehum = iaq = windspeed = brtemp = brhum = 1.0;
+    analogWrite(LED_PIN, 0);
+      Serial.begin(115200);
+    tft.init();
+    tft.fillScreen(TFT_BLACK);
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid, password);
+      tft.setCursor(0, 0);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
+      tft.setTextWrap(true); // Wrap on width
+      tft.print("Connecting...");
+      while (WiFi.status() != WL_CONNECTED) {
+        delay(250);
+        tft.print(".");
+      }
+      Blynk.config(auth, IPAddress(192, 168, 50, 197), 8080);
+      Blynk.connect();
+      //display.display();
+
+      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+      struct tm timeinfo;
+      getLocalTime(&timeinfo);
+      hours = timeinfo.tm_hour;
+      mins = timeinfo.tm_min;
+      secs = timeinfo.tm_sec;
+      server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Hi! I am Hubert.");
+      });
+
+      AsyncElegantOTA.begin(&server);    // Start ElegantOTA
+
+      server2.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send_P(200, "text/html", index_html, processor);
+      });
+
+      // Send a GET request to <ESP_IP>/update?state=<inputMessage>
+      server2.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
+        String inputMessage;
+        // GET input1 value on <ESP_IP>/update?state=<inputMessage>
+        if (request->hasParam(PARAM_INPUT_1)) {
+          inputMessage = request->getParam(PARAM_INPUT_1)->value();
+          digitalWrite(output, inputMessage.toInt());
+        }
+        else {
+          inputMessage = "No message sent";
+        }
+        Serial.println(inputMessage);
+        request->send(200, "text/plain", "OK");
+      });
+      
+      // Send a GET request to <ESP_IP>/slider?value=<inputMessage>
+      server2.on("/slider", HTTP_GET, [] (AsyncWebServerRequest *request) {
+        String inputMessage;
+        // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
+        if (request->hasParam(PARAM_INPUT_2)) {
+          inputMessage = request->getParam(PARAM_INPUT_2)->value();
+          brightVal = 256 - inputMessage.toInt();
+          timerSliderValue = inputMessage;
+        }
+        else {
+          inputMessage = "No message sent";
+        }
+        Serial.println(inputMessage);
+        
+        request->send(200, "text/plain", "OK");
+      });
+      
+      // Start server
+      server2.begin();
+
+      server.begin();
+      Serial.println("");
+      Serial.print("Connected to ");
+      Serial.println(ssid);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      analogWrite(LED_PIN, 1);
+    tft.fillScreen(TFT_BLACK);
+    //tft.drawRect(0,0,128,128, TFT_WHITE);
+      img.createSprite(90, 79);
+      img.fillSprite(TFT_BLACK);
+      img2.createSprite(38, 79);
+      img2.fillSprite(TFT_BLACK);
+      img3.createSprite(128, 14);
+      img3.fillSprite(TFT_BLACK);
+      tft.drawFastHLine(0, 24, 128, TFT_WHITE);
+          tft.setTextSize(1);
+  tft.setTextColor(YELLOW);
+  tft.setCursor(0,121);
+  tft.print("PM2.5 in/PM2.5out/IAQ");
+}
+
+
+
+/*BLYNK BRIDGES
+================
+floortemp:
+  bridge2.virtualWrite(V51, pmavgholder);
+  bridge2.virtualWrite(V55, inetTemp);
+  bridge2.virtualWrite(V56, inetWindspeed);
+  bridge2.virtualWrite(V57, inetWindgust);
+  bridge2.virtualWrite(V58, inetWinddeg);
+bedroom:
+  bridge2.virtualWrite(V71, pm25Avg.mean());
+  bridge2.virtualWrite(V72, tempSHT);
+  bridge2.virtualWrite(V73, humSHT);
+  bridge2.virtualWrite(V74, abshumSHT);
+  bridge2.virtualWrite(V75, bmeiaq);
+outdoors:
+  bridge2.virtualWrite(V62, tempBME);
+  bridge2.virtualWrite(V63, abshumBME);
+  bridge2.virtualWrite(V64, windchill);
+  bridge2.virtualWrite(V65, humidex);
+===============*/
+
+void loop() {
+
+Blynk.run();
+      
+
+    if (millis() - millisBlynk >= 15000)  //if it's been X milliseconds
+  {
+    analogWrite(LED_PIN, brightVal);
+    millisBlynk = millis();
+    dodisplay();
   }
 }
+
+
 
