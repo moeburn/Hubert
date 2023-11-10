@@ -31,7 +31,7 @@ const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 
 
 int hours, mins, secs;
-int brightVal;
+int brightVal= 0;
 bool isPM = false;
 
 #define LED_PIN 13
@@ -253,14 +253,16 @@ void dodisplay() {
   mins = timeinfo.tm_min;
   secs = timeinfo.tm_sec;
 
- /* if ((hours < 8) && (!isSleeping)){
+  if ((hours < 8) && (!isSleeping)){
     brightVal = 255;
+    analogWrite(LED_PIN, brightVal);
     isSleeping = true;
   }
     if ((hours >= 8) && (isSleeping)){
     brightVal = 1;
+    analogWrite(LED_PIN, brightVal);
     isSleeping = false;
-  }*/
+  }
 
     if (hours > 12) {
     hours -= 12;
@@ -421,6 +423,7 @@ void setup()
         if (request->hasParam(PARAM_INPUT_2)) {
           inputMessage = request->getParam(PARAM_INPUT_2)->value();
           brightVal = 256 - inputMessage.toInt();
+          analogWrite(LED_PIN, brightVal);
           timerSliderValue = inputMessage;
         }
         else {
@@ -484,9 +487,8 @@ void loop() {
 Blynk.run();
       
 
-    if (millis() - millisBlynk >= 15000)  //if it's been X milliseconds
+    if (millis() - millisBlynk >= 10000)  //if it's been X milliseconds
   {
-    analogWrite(LED_PIN, brightVal);
     millisBlynk = millis();
     dodisplay();
   }
