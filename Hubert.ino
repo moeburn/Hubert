@@ -21,6 +21,7 @@ const char* PARAM_INPUT_2 = "value";
 const int output = 2;
 
 String timerSliderValue = "50";
+WidgetTerminal terminal(V20);
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -35,7 +36,9 @@ int brightVal= 0;
 bool isPM = false;
 
 #define LED_PIN 13
-
+#define SCREEN_WIDTH  tft.width()  // 
+#define SCREEN_HEIGHT tft.height()
+const uint16_t MAX_ITERATION = 300; // Nombre de couleurs
 
 
 
@@ -59,6 +62,7 @@ TFT_eSprite img3 = TFT_eSprite(&tft);
 #define GREY 0xC618
 #define ORANGE 0xFE2F
 #define LIGHTGREEN 0x8F71
+#define LIGHTORANGE 0xFC08
 
 float p = 3.1415926;
 
@@ -163,7 +167,67 @@ bool isSleeping = false;
 
 unsigned long millisBlynk;
 
-float pm25in, pm25out, bridgetemp, bridgehum, iaq, windspeed, brtemp, brhum;
+float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2;
+
+float randnum, randnum2, zooom;
+
+float cr, ci;
+
+BLYNK_WRITE(V20) {
+  if (String("help") == param.asStr()) {
+    terminal.println("==List of available commands:==");
+    terminal.println("wifi");
+    terminal.println("julia");
+    terminal.println("cube");
+    terminal.println("==End of list.==");
+  }
+  if (String("wifi") == param.asStr()) {
+    terminal.println("> Connected to: ");
+    terminal.println(ssid);
+    terminal.print("IP address:");
+    terminal.println(WiFi.localIP());
+    terminal.print("Signal strength: ");
+    printLocalTime();
+    terminal.println(WiFi.RSSI());
+  }
+  if (String("julia") == param.asStr()) {
+    randnum = random(0, 1000);
+    cr = randnum/1000;
+    terminal.println("> ");
+    terminal.print(cr);
+    terminal.print(",");
+    randnum = random(0, 500);
+    ci = randnum/1000;
+    terminal.print(ci);
+    terminal.print(",");
+    randnum = random(0, 1000);
+    zooom = randnum/10;
+    terminal.println(zooom);
+    terminal.flush();
+    draw_Julia(-0.8,+0.156,zooom);
+    delay(5000);
+    tft.fillScreen(TFT_BLACK);
+    prepdisplay();
+  }
+  if (String("cube") == param.asStr()) {
+    tft.fillScreen(TFT_BLACK);
+    doCube();
+    tft.fillScreen(TFT_BLACK);
+    prepdisplay();
+  }
+  terminal.flush();
+}
+
+void printLocalTime() {
+  time_t rawtime;
+  struct tm* timeinfo;
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+  terminal.print("-");
+  terminal.print(asctime(timeinfo));
+  terminal.print(" - ");
+  terminal.flush();
+}
 
 
 BLYNK_WRITE(V71) {
@@ -192,6 +256,13 @@ BLYNK_WRITE(V72) {
 BLYNK_WRITE(V74) {
   brhum = param.asFloat();
 }
+BLYNK_WRITE(V76) {
+  bridgepres = param.asFloat();
+}
+BLYNK_WRITE(V77) {
+  bridgeco2 = param.asFloat();
+}
+
 
 uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r / 8) << 11) | ((g / 4) << 5) | (b / 8);
@@ -200,8 +271,19 @@ uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
 float pmR, pmG, pmB;
 float pmR2, pmG2, pmB2;
 float pmR3, pmG3, pmB3;
+float pmR4, pmG4, pmB4;
+
+void prepdisplay() {
+        tft.drawFastHLine(0, 24, 128, TFT_WHITE);
+          tft.setTextSize(1);
+  tft.setTextColor(YELLOW);
+  tft.setCursor(0,121);
+  tft.print("PM2.5 in/PM2.5out/IAQ");
+}
 
 void dodisplay() {
+
+  float CO2center = 1000.0;
   
   pmG = 55 - pm25in;
   if (pmG < 0) { pmG = 0; }
@@ -247,6 +329,21 @@ void dodisplay() {
   if (pmB3 < 0) {pmB3 = 0;}
   pmB3 *= (255.0/155.0);
   if (pmB3 > 255) {pmB3 = 255;}
+//================================
+  pmG4 = CO2center - (bridgeco2-400);
+  if (pmG4 < 0) {pmG4 = 0;}
+  pmG4 *= (255.0/CO2center);
+  if (pmG4 > 255) {pmG4 = 255;}
+  
+  pmR4 = (bridgeco2-400);
+  if (pmR4 < 0) {pmR4 = 0;}
+  pmR4 *= (255.0/CO2center);
+  if (pmR4 > 255) {pmR4 = 255;}
+  
+  pmB4 = (bridgeco2-400) - CO2center;
+  if (pmB4 < 0) {pmB4 = 0;}
+  pmB4 *= (255.0/CO2center);
+  if (pmB4 > 255) {pmB4 = 255;}
 
     struct tm timeinfo;
   getLocalTime(&timeinfo);
@@ -255,13 +352,21 @@ void dodisplay() {
   secs = timeinfo.tm_sec;
 
   if ((hours < 8) && (!isSleeping)){
-    brightVal = 255;
-    analogWrite(LED_PIN, brightVal);
+    for(int i=brightVal; i<255; i++)
+    {
+      analogWrite(LED_PIN, i);
+      delay(40);
+    }
+    analogWrite(LED_PIN, 255);
     isSleeping = true;
   }
     if ((hours >= 8) && (isSleeping)){
-    brightVal = 1;
-    analogWrite(LED_PIN, brightVal);
+    for (int i=255; i>brightVal; i--)
+      {
+        analogWrite(LED_PIN, i);
+        delay(40);
+      }
+      analogWrite(LED_PIN, brightVal);
     isSleeping = false;
   }
 
@@ -273,6 +378,7 @@ void dodisplay() {
   }
   if (hours == 12) {isPM = true;}
   if (hours == 0) {hours = 12;}
+  
 
   tft.setCursor(64, 1);
   tft.setTextDatum(TC_DATUM);
@@ -309,11 +415,18 @@ if (hours < 10) {
   img2.println("iH:");
   img2.setTextColor(MAGENTA);
   img2.println("oT:");
-  img2.setTextColor(LIGHTCYAN);
-  img2.println("oH:");
+  if (bridgetemp > 15) {
+    img2.setTextColor(LIGHTCYAN);
+    img2.println("oH:");
+  }
+  else
+  {
+    img2.setTextColor(LIGHTORANGE);
+    img2.println("P:");    
+  }
   img2.setTextColor(LIGHTGREEN);
   img2.println("Ws:");
-  img2.pushSprite(0,27);
+  img2.pushSprite(0,28);
 
   img.fillSprite(TFT_BLACK);
   img.setCursor(0,0);
@@ -321,7 +434,9 @@ if (hours < 10) {
   img.setTextColor(TFT_BLUE, TFT_BLACK);
   img.setTextDatum(TR_DATUM);
   int ypos;
-  String stringtodraw = String(brtemp, 2) + "\367""C";
+  String stringtodraw = String(brtemp, 2) + " C";
+  img.drawCircle(72, 3, 2, LIGHTRED);
+  img.drawCircle(72, 3, 3, LIGHTRED);
   img.setTextColor(LIGHTRED);
   img.drawString(stringtodraw, 90,0);
   ypos += img.fontHeight();
@@ -329,18 +444,27 @@ if (hours < 10) {
   img.setTextColor(LIGHTBLUE);
   img.drawString(stringtodraw, 90,ypos);
   ypos += img.fontHeight();
-  stringtodraw = String(bridgetemp, 2) + "\367""C";
+  stringtodraw = String(bridgetemp, 2) + " C";
+  img.drawCircle(72, 35, 2, MAGENTA);
+  img.drawCircle(72, 35, 3, MAGENTA);
   img.setTextColor(MAGENTA);
   img.drawString(stringtodraw, 90,ypos);
   ypos += img.fontHeight();
-  stringtodraw = String(bridgehum, 2) + "g";
-  img.setTextColor(LIGHTCYAN);
-  img.drawString(stringtodraw, 90,ypos);
+  if (bridgetemp > 15) {
+    stringtodraw = String(bridgehum, 2) + "g";
+    img.setTextColor(LIGHTCYAN);
+    img.drawString(stringtodraw, 90,ypos);
+  }
+  else {
+    stringtodraw = String(bridgepres, 1) + "mb";
+    img.setTextColor(LIGHTORANGE);
+    img.drawString(stringtodraw, 90,ypos);    
+  }
   ypos += img.fontHeight();
   stringtodraw = String(windspeed, 1) + "kph";
   img.setTextColor(LIGHTGREEN);
   img.drawString(stringtodraw, 90,ypos);
-  img.pushSprite(38, 27);
+  img.pushSprite(38, 28);
 
   img3.fillSprite(TFT_BLACK);
   img3.setCursor(0,0);
@@ -348,27 +472,152 @@ if (hours < 10) {
   img3.setTextSize(1);
   img3.setTextDatum(TL_DATUM);
  img3.setTextColor(YELLOW, RGBto565(pmR, pmG, pmB));
-  img3.drawFloat(pm25in, 1, 0, 0);
+  img3.drawFloat(pm25in, 0, 0, 0);
   //img3.print(" ");
   img3.setTextDatum(TC_DATUM);
   //img3.setCursor(64,0);
   img3.setTextColor(YELLOW, RGBto565(pmR2, pmG2, pmB2));
   //if (pm25out < 10) {img3.print(" ");}
   //if (pm25in >= 10) {img3.print(pm25out, 1);} else {img3.print(pm25out, 2);}
-  img3.drawFloat(pm25out, 1, 64, 0);
-  img3.setTextDatum(TR_DATUM);
+  img3.drawFloat(pm25out, 0, 46, 0);
+  img3.setTextDatum(TC_DATUM);
   //img3.setCursor(128,0);
   img3.setTextColor(YELLOW, RGBto565(pmR3, pmG3, pmB3));
-  img3.drawFloat(iaq, 1, 128, 0);
+  img3.drawFloat(iaq, 0, 83, 0);
   //img3.print(iaq);
+  img3.setTextDatum(TR_DATUM);
+  img3.setTextColor(YELLOW, RGBto565(pmR4, pmG4, pmB4));
+  img3.drawFloat(bridgeco2, 0, 128, 0);
   img3.pushSprite(0, 107);
 }
+
+
+void draw_Julia(float c_r, float c_i, float zoom) {
+
+  tft.setCursor(0,0);
+  float new_r = 0.0, new_i = 0.0, old_r = 0.0, old_i = 0.0;
+
+  /* Pour chaque pixel en X */
+
+  for(int16_t x = SCREEN_WIDTH/2 - 1; x >= 0; x--) { // Rely on inverted symettry
+    /* Pour chaque pixel en Y */
+    for(uint16_t y = 0; y < SCREEN_HEIGHT; y++) {      
+      old_r = 1.5 * (x - SCREEN_WIDTH / 2) / (0.5 * zoom * SCREEN_WIDTH);
+      old_i = (y - SCREEN_HEIGHT / 2) / (0.5 * zoom * SCREEN_HEIGHT);
+      uint16_t i = 0;
+
+      while ((old_r * old_r + old_i * old_i) < 4.0 && i < MAX_ITERATION) {
+        new_r = old_r * old_r - old_i * old_i ;
+        new_i = 2.0 * old_r * old_i;
+
+        old_r = new_r+c_r;
+        old_i = new_i+c_i;
+        
+        i++;
+      }
+      /* Affiche le pixel */
+      if (i < 100){
+        tft.drawPixel(x,y,tft.color565(255,255,map(i,0,100,255,0)));
+        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(255,255,map(i,0,100,255,0)));
+      }if(i<200){
+        tft.drawPixel(x,y,tft.color565(255,map(i,100,200,255,0),0));
+        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(255,map(i,100,200,255,0),0));
+      }else{
+        tft.drawPixel(x,y,tft.color565(map(i,200,300,255,0),0,0));
+        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(map(i,200,300,255,0),0,0));
+      }
+    }
+  }
+}
+
+const float sin_d[] = {
+  0, 0.17, 0.34, 0.5, 0.64, 0.77, 0.87, 0.94, 0.98, 1, 0.98, 0.94,
+  0.87, 0.77, 0.64, 0.5, 0.34, 0.17, 0, -0.17, -0.34, -0.5, -0.64,
+  -0.77, -0.87, -0.94, -0.98, -1, -0.98, -0.94, -0.87, -0.77,
+  -0.64, -0.5, -0.34, -0.17
+};
+const float cos_d[] = {
+  1, 0.98, 0.94, 0.87, 0.77, 0.64, 0.5, 0.34, 0.17, 0, -0.17, -0.34,
+  -0.5, -0.64, -0.77, -0.87, -0.94, -0.98, -1, -0.98, -0.94, -0.87,
+  -0.77, -0.64, -0.5, -0.34, -0.17, 0, 0.17, 0.34, 0.5, 0.64, 0.77,
+  0.87, 0.94, 0.98
+};
+const float d = 10;
+float px[] = {
+  -d, d, d, -d, -d, d, d, -d
+};
+float py[] = {
+  -d, -d, d, d, -d, -d, d, d
+};
+float pz[] = {
+  -d, -d, -d, -d, d, d, d, d
+};
+
+float p2x[] = {
+  0, 0, 0, 0, 0, 0, 0, 0
+};
+float p2y[] = {
+  0, 0, 0, 0, 0, 0, 0, 0
+};
+
+int r[] = {
+  0, 0, 0
+};
+
+void doCube() {
+delay(16);
+  for (int k = 0; k < 400; k++) {
+    //tft.fillScreen(TFT_BLACK);
+    r[0] = r[0] + 1;
+    r[1] = r[1] + 1;
+    if (r[0] == 36) r[0] = 0;
+    if (r[1] == 36) r[1] = 0;
+    if (r[2] == 36) r[2] = 0;
+    for (int i = 0; i < 8; i++) {
+
+      float px2 = px[i];
+      float py2 = cos_d[r[0]] * py[i] - sin_d[r[0]] * pz[i];
+      float pz2 = sin_d[r[0]] * py[i] + cos_d[r[0]] * pz[i];
+
+      float px3 = cos_d[r[1]] * px2 + sin_d[r[1]] * pz2;
+      float py3 = py2;
+      float pz3 = -sin_d[r[1]] * px2 + cos_d[r[1]] * pz2;
+
+      float ax = cos_d[r[2]] * px3 - sin_d[r[2]] * py3;
+      float ay = sin_d[r[2]] * px3 + cos_d[r[2]] * py3;
+      float az = pz3 - 190;
+
+      p2x[i] = ((tft.width()) / 2) + ax * 500 / az;
+      p2y[i] = ((tft.height()) / 2) + ay * 500 / az;
+    }
+    for (int i = 0; i < 3; i++) {
+      tft.drawLine(p2x[i], p2y[i], p2x[i + 1], p2y[i + 1], WHITE);
+      tft.drawLine(p2x[i + 4], p2y[i + 4], p2x[i + 5], p2y[i + 5], RED);
+      tft.drawLine(p2x[i], p2y[i], p2x[i + 4], p2y[i + 4], BLUE);
+    }
+    tft.drawLine(p2x[3], p2y[3], p2x[0], p2y[0], MAGENTA);
+    tft.drawLine(p2x[7], p2y[7], p2x[4], p2y[4], GREEN);
+    tft.drawLine(p2x[3], p2y[3], p2x[7], p2y[7], YELLOW);
+    //delay(20);
+    for (int i = 0; i < 3; i++) {
+      tft.drawLine(p2x[i], p2y[i], p2x[i + 1], p2y[i + 1], BLACK);
+      tft.drawLine(p2x[i + 4], p2y[i + 4], p2x[i + 5], p2y[i + 5], BLACK);
+      tft.drawLine(p2x[i], p2y[i], p2x[i + 4], p2y[i + 4], BLACK);
+    }
+    tft.drawLine(p2x[3], p2y[3], p2x[0], p2y[0], BLACK);
+    tft.drawLine(p2x[7], p2y[7], p2x[4], p2y[4], BLACK);
+    tft.drawLine(p2x[3], p2y[3], p2x[7], p2y[7], BLACK);
+  }
+}
+
+
+
  
 void setup()
 {
   pinMode(LED_PIN, OUTPUT);
   pm25in = pm25out = bridgetemp = bridgehum = iaq = windspeed = brtemp = brhum = 1.0;
-    analogWrite(LED_PIN, 0);
+    analogWrite(LED_PIN, 128);
       Serial.begin(115200);
     tft.init();
     tft.fillScreen(TFT_BLACK);
@@ -392,6 +641,15 @@ void setup()
       hours = timeinfo.tm_hour;
       mins = timeinfo.tm_min;
       secs = timeinfo.tm_sec;
+        terminal.println("***Hubert the Clock v1.1***");
+
+  terminal.print("Connected to ");
+  terminal.println(ssid);
+  terminal.print("IP address: ");
+  terminal.println(WiFi.localIP());
+
+  printLocalTime();
+  terminal.flush();
       server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Hi! I am Hubert.");
       });
@@ -423,7 +681,7 @@ void setup()
         // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
         if (request->hasParam(PARAM_INPUT_2)) {
           inputMessage = request->getParam(PARAM_INPUT_2)->value();
-          brightVal = 256 - inputMessage.toInt();
+          brightVal = 255 - inputMessage.toInt();
           analogWrite(LED_PIN, brightVal);
           timerSliderValue = inputMessage;
         }
@@ -453,11 +711,13 @@ void setup()
       img2.fillSprite(TFT_BLACK);
       img3.createSprite(128, 14);
       img3.fillSprite(TFT_BLACK);
-      tft.drawFastHLine(0, 24, 128, TFT_WHITE);
-          tft.setTextSize(1);
-  tft.setTextColor(YELLOW);
-  tft.setCursor(0,121);
-  tft.print("PM2.5 in/PM2.5out/IAQ");
+prepdisplay();
+  dodisplay();
+  for (int i=255; i>0; i--)
+  {
+    analogWrite(LED_PIN, i);
+    delay(10);
+  }
 }
 
 
@@ -494,6 +754,3 @@ Blynk.run();
     dodisplay();
   }
 }
-
-
-
