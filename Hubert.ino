@@ -167,7 +167,7 @@ bool isSleeping = false;
 
 unsigned long millisBlynk;
 
-float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2;
+float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw;
 
 float randnum, randnum2, zooom;
 
@@ -263,6 +263,12 @@ BLYNK_WRITE(V77) {
   bridgeco2 = param.asFloat();
 }
 
+BLYNK_WRITE(V81) {
+  bridgeIrms = param.asFloat();
+  watts = bridgeIrms * 120.0;
+  kw = watts / 1000.0;
+}
+
 
 uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r / 8) << 11) | ((g / 4) << 5) | (b / 8);
@@ -278,72 +284,86 @@ void prepdisplay() {
           tft.setTextSize(1);
   tft.setTextColor(YELLOW);
   tft.setCursor(0,121);
-  tft.print("PM2.5 in/PM2.5out/IAQ");
+  //////////"/////////////////////"
+  tft.print("PMin/PMout/KW/IAQ/CO2");
 }
 
 void dodisplay() {
 
   float CO2center = 1000.0;
+  float brightness = 0.75;
   
   pmG = 55 - pm25in;
   if (pmG < 0) { pmG = 0; }
   pmG *= (200.0 / 55.0);
   if (pmG > 255) { pmG = 255; }
+  pmG *= brightness;
 
   pmR = pm25in;
   if (pmR < 0) { pmR = 0; }
   pmR *= (255.0 / 55.0);
   if (pmR > 255) { pmR = 255; }
+  pmR *= brightness;
 
   pmB = pm25in - 100;
   if (pmB < 0) { pmB = 0; }
   pmB *= (255.0 / 55.0);
   if (pmB > 255) { pmB = 255; }
+  pmB *= brightness;
 //===============================
   pmG2 = 55 - pm25out;
   if (pmG2 < 0) { pmG2 = 0; }
   pmG2 *= (200.0 / 55.0);
   if (pmG2 > 255) { pmG2 = 255; }
+  pmG2 *= brightness;
 
   pmR2 = pm25out;
   if (pmR2 < 0) { pmR2 = 0; }
   pmR2 *= (255.0 / 55.0);
   if (pmR2 > 255) { pmR2 = 255; }
+  pmR2 *= brightness;
 
   pmB2 = pm25out - 100;
   if (pmB2 < 0) { pmB2 = 0; }
   pmB2 *= (255.0 / 55.0);
   if (pmB2 > 255) { pmB2 = 255; }
+  pmB2 *= brightness;
 //================================
   pmG3 = 155 - iaq;
   if (pmG3 < 0) {pmG3 = 0;}
   pmG3 *= (255.0/155.0);
   if (pmG3 > 255) {pmG3 = 255;}
+  pmG3 *= brightness;
   
   pmR3 = iaq;
   if (pmR3 < 0) {pmR3 = 0;}
   pmR3 *= (255.0/155.0);
   if (pmR3 > 255) {pmR3 = 255;}
+  pmR3 *= brightness;
   
   pmB3 = iaq - 155;
   if (pmB3 < 0) {pmB3 = 0;}
   pmB3 *= (255.0/155.0);
   if (pmB3 > 255) {pmB3 = 255;}
+  pmB3 *= brightness;
 //================================
   pmG4 = CO2center - (bridgeco2-400);
   if (pmG4 < 0) {pmG4 = 0;}
   pmG4 *= (255.0/CO2center);
   if (pmG4 > 255) {pmG4 = 255;}
+  pmG4 *= brightness;
   
   pmR4 = (bridgeco2-400);
   if (pmR4 < 0) {pmR4 = 0;}
   pmR4 *= (255.0/CO2center);
   if (pmR4 > 255) {pmR4 = 255;}
+  pmR4 *= brightness;
   
   pmB4 = (bridgeco2-400) - CO2center;
   if (pmB4 < 0) {pmB4 = 0;}
   pmB4 *= (255.0/CO2center);
   if (pmB4 > 255) {pmB4 = 255;}
+  pmB4 *= brightness;
 
     struct tm timeinfo;
   getLocalTime(&timeinfo);
@@ -471,22 +491,25 @@ if (hours < 10) {
   img3.setTextFont(2);
   img3.setTextSize(1);
   img3.setTextDatum(TL_DATUM);
- img3.setTextColor(YELLOW, RGBto565(pmR, pmG, pmB));
+ img3.setTextColor(WHITE, RGBto565(pmR, pmG, pmB));
   img3.drawFloat(pm25in, 0, 0, 0);
   //img3.print(" ");
   img3.setTextDatum(TC_DATUM);
   //img3.setCursor(64,0);
-  img3.setTextColor(YELLOW, RGBto565(pmR2, pmG2, pmB2));
+  img3.setTextColor(WHITE, RGBto565(pmR2, pmG2, pmB2));
   //if (pm25out < 10) {img3.print(" ");}
   //if (pm25in >= 10) {img3.print(pm25out, 1);} else {img3.print(pm25out, 2);}
-  img3.drawFloat(pm25out, 0, 46, 0);
-  img3.setTextDatum(TC_DATUM);
+  img3.drawFloat(pm25out, 0, 32, 0);
+//  img3.setTextDatum(TC_DATUM);
   //img3.setCursor(128,0);
-  img3.setTextColor(YELLOW, RGBto565(pmR3, pmG3, pmB3));
-  img3.drawFloat(iaq, 0, 83, 0);
+  img3.setTextColor(WHITE);
+  if (watts < 1000) {img3.drawFloat(watts, 0, 64, 0);}
+  else {img3.drawFloat(kw, 1, 64, 0);}
+  img3.setTextColor(WHITE, RGBto565(pmR3, pmG3, pmB3));
+  img3.drawFloat(iaq, 0, 90, 0);
   //img3.print(iaq);
   img3.setTextDatum(TR_DATUM);
-  img3.setTextColor(YELLOW, RGBto565(pmR4, pmG4, pmB4));
+  img3.setTextColor(WHITE, RGBto565(pmR4, pmG4, pmB4));
   img3.drawFloat(bridgeco2, 0, 128, 0);
   img3.pushSprite(0, 107);
 }
