@@ -265,7 +265,7 @@ BLYNK_WRITE(V77) {
 
 BLYNK_WRITE(V81) {
   bridgeIrms = param.asFloat();
-  watts = bridgeIrms * 120.0;
+  watts = bridgeIrms;
   kw = watts / 1000.0;
 }
 
@@ -499,14 +499,15 @@ if (hours < 10) {
   img3.setTextColor(WHITE, RGBto565(pmR2, pmG2, pmB2));
   //if (pm25out < 10) {img3.print(" ");}
   //if (pm25in >= 10) {img3.print(pm25out, 1);} else {img3.print(pm25out, 2);}
-  img3.drawFloat(pm25out, 0, 32, 0);
+  img3.drawFloat(pm25out, 0, 26, 0);
 //  img3.setTextDatum(TC_DATUM);
   //img3.setCursor(128,0);
   img3.setTextColor(WHITE);
-  if (watts < 1000) {img3.drawFloat(watts, 0, 64, 0);}
-  else {img3.drawFloat(kw, 1, 64, 0);}
+  int watts_x = 52; //because I cite it twice in the if/else statement:
+  if (watts < 1000) {img3.drawFloat(watts, 0, watts_x, 0);}
+  else {img3.drawFloat(kw, 1, watts_x, 0);}
   img3.setTextColor(WHITE, RGBto565(pmR3, pmG3, pmB3));
-  img3.drawFloat(iaq, 0, 90, 0);
+  img3.drawFloat(iaq, 0, 80, 0);
   //img3.print(iaq);
   img3.setTextDatum(TR_DATUM);
   img3.setTextColor(WHITE, RGBto565(pmR4, pmG4, pmB4));
