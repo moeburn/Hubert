@@ -1,15 +1,23 @@
 #include <WiFi.h>
+#include <WiFiManager.h> 
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
 #include <StreamLib.h>
 #include "time.h"
 #include <Wire.h>
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 #include <TFT_eSPI.h> // Hardware-specific library
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
+//REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 #include <SPI.h>
 #include <BlynkSimpleEsp32.h>
 
 char auth[] = "8_-CN2rm4ki9P3i_NkPhxIbCiKd5RXhK";  //BLYNK
+
 
 // Include custom images
 //#include "images.h"
@@ -28,7 +36,7 @@ AsyncWebServer server(80);
 AsyncWebServer server2(8080);
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
-const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
+const int daylightOffset_sec = 3600;   //Replace with your daylight offset (secs)
 
 
 int hours, mins, secs;
@@ -233,9 +241,9 @@ void printLocalTime() {
 BLYNK_WRITE(V71) {
   pm25in = param.asFloat();
 }
-BLYNK_WRITE(V51) {
+/*BLYNK_WRITE(V51) {
   pm25out = param.asFloat();
-}
+}*/
 
 BLYNK_WRITE(V62) {
   bridgetemp = param.asFloat();
@@ -244,11 +252,18 @@ BLYNK_WRITE(V63) {
   bridgehum = param.asFloat();
 }
 
+BLYNK_WRITE(V66) {
+  pm25out = param.asFloat();
+}
+
 BLYNK_WRITE(V75) {
   iaq = param.asFloat();
 }
 BLYNK_WRITE(V56) {
-  windspeed = param.asFloat();
+  float ws = param.asFloat();
+  if (!isnan(ws)){
+    windspeed = ws;
+  }
 }
 BLYNK_WRITE(V72) {
   brtemp = param.asFloat();
@@ -645,17 +660,42 @@ void setup()
       Serial.begin(115200);
     tft.init();
     tft.fillScreen(TFT_BLACK);
-      WiFi.mode(WIFI_STA);
-      WiFi.begin(ssid, password);
-      tft.setCursor(0, 0);
       tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
       tft.setTextWrap(true); // Wrap on width
-      tft.print("Connecting...");
-      while (WiFi.status() != WL_CONNECTED) {
+          tft.setCursor(0, 0);
+          tft.println("Connecting to wifi...");
+      WiFi.mode(WIFI_STA);
+      WiFiManager wm;
+      bool res;
+      // res = wm.autoConnect(); // auto generated AP name from chipid
+       res = wm.autoConnect("HubertSetup"); // anonymous ap
+
+
+      if(!res) {
+          tft.fillScreen(TFT_RED);
+          tft.setCursor(0, 0);
+          tft.println("Failed to connect, restarting");
+          delay(3000);
+          ESP.restart();
+      } 
+    else {
+        //if you get here you have connected to the WiFi    
+        tft.fillScreen(TFT_GREEN);
+        tft.setCursor(0, 0);
+        tft.println("Connected!");
+        tft.println(WiFi.localIP());
+        delay(3000);
+      }
+      //WiFi.begin(ssid, password);
+      tft.fillScreen(TFT_BLACK);
+      tft.setCursor(0, 0);
+
+      tft.print("Connecting to Blynk...");
+      /*while (WiFi.status() != WL_CONNECTED) {
         delay(250);
         tft.print(".");
-      }
-      Blynk.config(auth, IPAddress(192, 168, 50, 197), 8080);
+      }*/
+      Blynk.config(auth, IPAddress(216,110,224,105), 8080);
       Blynk.connect();
       //display.display();
 
@@ -665,7 +705,7 @@ void setup()
       hours = timeinfo.tm_hour;
       mins = timeinfo.tm_min;
       secs = timeinfo.tm_sec;
-        terminal.println("***Hubert the Clock v1.1***");
+        terminal.println("***Hubert the Clock v1.3***");
 
   terminal.print("Connected to ");
   terminal.println(ssid);
