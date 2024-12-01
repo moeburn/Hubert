@@ -175,7 +175,7 @@ bool isSleeping = false;
 
 unsigned long millisBlynk;
 
-float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw;
+float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw, neotemp;
 
 float randnum, randnum2, zooom;
 
@@ -235,6 +235,10 @@ void printLocalTime() {
   terminal.print(asctime(timeinfo));
   terminal.print(" - ");
   terminal.flush();
+}
+
+BLYNK_WRITE(V41) {
+  neotemp = param.asFloat();
 }
 
 
@@ -479,7 +483,9 @@ if (hours < 10) {
   img.setTextColor(LIGHTBLUE);
   img.drawString(stringtodraw, 90,ypos);
   ypos += img.fontHeight();
-  stringtodraw = String(bridgetemp, 2) + " C";
+  if ((bridgetemp > neotemp) && (neotemp != 0))
+  {stringtodraw = String(neotemp, 2) + " C";}
+  else {stringtodraw = String(bridgetemp, 2) + " C";}
   img.drawCircle(72, 35, 2, MAGENTA);
   img.drawCircle(72, 35, 3, MAGENTA);
   img.setTextColor(MAGENTA);
