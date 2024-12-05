@@ -263,7 +263,7 @@ BLYNK_WRITE(V66) {
 BLYNK_WRITE(V75) {
   iaq = param.asFloat();
 }
-BLYNK_WRITE(V56) {
+BLYNK_WRITE(V78) {
   float ws = param.asFloat();
   if (!isnan(ws)){
     windspeed = ws;
