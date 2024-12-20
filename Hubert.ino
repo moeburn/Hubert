@@ -175,7 +175,7 @@ bool isSleeping = false;
 
 unsigned long millisBlynk;
 
-float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw, neotemp;
+float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw, neotemp, jojutemp, temptodraw;
 
 float randnum, randnum2, zooom;
 
@@ -241,6 +241,9 @@ BLYNK_WRITE(V41) {
   neotemp = param.asFloat();
 }
 
+BLYNK_WRITE(V42) {
+  jojutemp = param.asFloat();
+}
 
 BLYNK_WRITE(V71) {
   pm25in = param.asFloat();
@@ -269,6 +272,10 @@ BLYNK_WRITE(V78) {
     windspeed = ws;
   }
 }
+
+BLYNK_WRITE(V79) {
+}
+
 BLYNK_WRITE(V72) {
   brtemp = param.asFloat();
 }
@@ -286,6 +293,9 @@ BLYNK_WRITE(V81) {
   bridgeIrms = param.asFloat();
   watts = bridgeIrms;
   kw = watts / 1000.0;
+}
+
+BLYNK_WRITE(V82) {
 }
 
 
@@ -483,9 +493,8 @@ if (hours < 10) {
   img.setTextColor(LIGHTBLUE);
   img.drawString(stringtodraw, 90,ypos);
   ypos += img.fontHeight();
-  if ((bridgetemp > neotemp) && (neotemp != 0))
-  {stringtodraw = String(neotemp, 2) + " C";}
-  else {stringtodraw = String(bridgetemp, 2) + " C";}
+  temptodraw = min(bridgetemp, min(neotemp, jojutemp));
+  stringtodraw = String(temptodraw, 2) + " C";
   img.drawCircle(72, 35, 2, MAGENTA);
   img.drawCircle(72, 35, 3, MAGENTA);
   img.setTextColor(MAGENTA);
