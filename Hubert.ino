@@ -2,7 +2,8 @@
 #include <WiFiManager.h> 
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <AsyncElegantOTA.h>
+//#include <AsyncElegantOTA.h>
+#include <ArduinoOTA.h>
 #include <StreamLib.h>
 #include "time.h"
 #include <Wire.h>
@@ -32,7 +33,7 @@ String timerSliderValue = "50";
 WidgetTerminal terminal(V20);
 
 // Create AsyncWebServer object on port 80
-AsyncWebServer server(80);
+//AsyncWebServer server(80);
 AsyncWebServer server2(8080);
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
@@ -493,7 +494,8 @@ if (hours < 10) {
   img.setTextColor(LIGHTBLUE);
   img.drawString(stringtodraw, 90,ypos);
   ypos += img.fontHeight();
-  temptodraw = min(bridgetemp, min(neotemp, jojutemp));
+  float min1 = min(neotemp, jojutemp);
+  temptodraw = min(bridgetemp, min1);
   stringtodraw = String(temptodraw, 2) + " C";
   img.drawCircle(72, 35, 2, MAGENTA);
   img.drawCircle(72, 35, 3, MAGENTA);
@@ -729,11 +731,9 @@ void setup()
 
   printLocalTime();
   terminal.flush();
-      server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Hi! I am Hubert.");
-      });
 
-      AsyncElegantOTA.begin(&server);    // Start ElegantOTA
+
+      //AsyncElegantOTA.begin(&server);    // Start ElegantOTA
 
       server2.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send_P(200, "text/html", index_html, processor);
@@ -775,7 +775,8 @@ void setup()
       // Start server
       server2.begin();
 
-      server.begin();
+      ArduinoOTA.setHostname("Hubert");
+      ArduinoOTA.begin();
       Serial.println("");
       Serial.print("Connected to ");
       Serial.println(ssid);
@@ -823,7 +824,7 @@ outdoors:
 ===============*/
 
 void loop() {
-
+ArduinoOTA.handle();
 Blynk.run();
       
 
