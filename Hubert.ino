@@ -306,7 +306,7 @@ uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
 
 float pmR, pmG, pmB;
 float pmR2, pmG2, pmB2;
-float pmR3, pmG3, pmB3;
+uint8_t  pmR3, pmG3, pmB3;
 float pmR4, pmG4, pmB4;
 
 void prepdisplay() {
@@ -316,6 +316,34 @@ void prepdisplay() {
   tft.setCursor(0,121);
   //////////"/////////////////////"
   tft.print("PMin/PMout/KW/IAQ/CO2");
+}
+
+void getVocColor(int voc_index, uint8_t &r, uint8_t &g, uint8_t &b) {
+    float bright = 0.75;
+    if (voc_index < 150) {
+        r = 0; g = 255; b = 0;
+    } else if (voc_index < 250) {
+        r = map(voc_index, 150, 250, 0, 255);
+        g = 255; b = 0;
+    } else if (voc_index < 400) {
+        r = 255;
+        g = map(voc_index, 250, 400, 255, 128);
+        b = 0;
+    } else {
+        r = 255;
+        g = map(voc_index, 400, 500, 128, 0);
+        b = 0;
+    }
+  b = voc_index - 155;
+  if (b < 0) {b = 0;}
+  b *= (255.0/155.0);
+
+  r *= bright;
+  g *= bright;
+  b *= bright;
+  if (r > 255) {r = 255;}
+  if (g > 255) {g = 255;}
+  if (b > 255) {b = 255;}
 }
 
 void dodisplay() {
@@ -359,7 +387,7 @@ void dodisplay() {
   if (pmB2 > 255) { pmB2 = 255; }
   pmB2 *= brightness;
 //================================
-  pmG3 = 155 - iaq;
+  /*pmG3 = 155 - iaq;
   if (pmG3 < 0) {pmG3 = 0;}
   pmG3 *= (255.0/155.0);
   if (pmG3 > 255) {pmG3 = 255;}
@@ -375,7 +403,8 @@ void dodisplay() {
   if (pmB3 < 0) {pmB3 = 0;}
   pmB3 *= (255.0/155.0);
   if (pmB3 > 255) {pmB3 = 255;}
-  pmB3 *= brightness;
+  pmB3 *= brightness;*/
+  getVocColor(iaq, pmR3, pmG3, pmB3);
 //================================
   pmG4 = CO2center - (bridgeco2-400);
   if (pmG4 < 0) {pmG4 = 0;}
