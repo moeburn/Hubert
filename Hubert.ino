@@ -42,6 +42,7 @@ const int daylightOffset_sec = 3600;   //Replace with your daylight offset (secs
 
 int hours, mins, secs;
 int brightVal= 0;
+bool autobright = true;
 bool isPM = false;
 
 #define LED_PIN 13
@@ -74,6 +75,7 @@ TFT_eSprite img3 = TFT_eSprite(&tft);
 #define LIGHTORANGE 0xFC08
 
 float p = 3.1415926;
+float lightread;
 
 
 
@@ -96,7 +98,9 @@ String twoDigits(int digits) {
 
 
 
-
+#define every(interval) \
+    static uint32_t __every__##interval = millis(); \
+    if (millis() - __every__##interval >= interval && (__every__##interval = millis()))
 
 
 
@@ -174,7 +178,7 @@ String outputState(){
 
 bool isSleeping = false;
 
-unsigned long millisBlynk;
+unsigned long millisBlynk, millisAuto;
 
 float pm25in, pm25out, bridgetemp, bridgehum, bridgepres, iaq, windspeed, brtemp, brhum, bridgeco2, bridgeIrms, watts, kw, neotemp, jojutemp, temptodraw;
 
@@ -299,6 +303,9 @@ BLYNK_WRITE(V81) {
 BLYNK_WRITE(V82) {
 }
 
+BLYNK_WRITE(V83) {
+  lightread  = param.asFloat();
+}
 
 uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r / 8) << 11) | ((g / 4) << 5) | (b / 8);
@@ -306,7 +313,7 @@ uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
 
 float pmR, pmG, pmB;
 float pmR2, pmG2, pmB2;
-uint8_t  pmR3, pmG3, pmB3;
+float  pmR3, pmG3, pmB3;
 float pmR4, pmG4, pmB4;
 
 void prepdisplay() {
@@ -387,24 +394,24 @@ void dodisplay() {
   if (pmB2 > 255) { pmB2 = 255; }
   pmB2 *= brightness;
 //================================
-  /*pmG3 = 155 - iaq;
+  pmG3 = 250 - iaq;
   if (pmG3 < 0) {pmG3 = 0;}
-  pmG3 *= (255.0/155.0);
+  pmG3 *= (255.0/250.0);
   if (pmG3 > 255) {pmG3 = 255;}
   pmG3 *= brightness;
   
   pmR3 = iaq;
   if (pmR3 < 0) {pmR3 = 0;}
-  pmR3 *= (255.0/155.0);
+  pmR3 *= (255.0/250.0);
   if (pmR3 > 255) {pmR3 = 255;}
   pmR3 *= brightness;
   
-  pmB3 = iaq - 155;
+  pmB3 = iaq - 250;
   if (pmB3 < 0) {pmB3 = 0;}
-  pmB3 *= (255.0/155.0);
+  pmB3 *= (255.0/250.0);
   if (pmB3 > 255) {pmB3 = 255;}
-  pmB3 *= brightness;*/
-  getVocColor(iaq, pmR3, pmG3, pmB3);
+  pmB3 *= brightness;
+  //getVocColor(iaq, pmR3, pmG3, pmB3);
 //================================
   pmG4 = CO2center - (bridgeco2-400);
   if (pmG4 < 0) {pmG4 = 0;}
@@ -751,7 +758,7 @@ void setup()
       hours = timeinfo.tm_hour;
       mins = timeinfo.tm_min;
       secs = timeinfo.tm_sec;
-        terminal.println("***Hubert the Clock v1.3***");
+        terminal.println("***Hubert the Clock v1.4***");
 
   terminal.print("Connected to ");
   terminal.println(ssid);
@@ -791,6 +798,9 @@ void setup()
           inputMessage = request->getParam(PARAM_INPUT_2)->value();
           brightVal = 255 - inputMessage.toInt();
           analogWrite(LED_PIN, brightVal);
+          Blynk.virtualWrite(V2, (255-brightVal));
+          autobright = false;
+          millisAuto = millis();
           timerSliderValue = inputMessage;
         }
         else {
@@ -861,5 +871,23 @@ Blynk.run();
   {
     millisBlynk = millis();
     dodisplay();
+    if (autobright){
+      int lightmap = map(lightread, 0, 25000, 255, 0);
+      if (lightmap > 255) {lightmap = 255;}
+      if (lightmap < 1) {lightmap = 1;}
+      analogWrite(LED_PIN, lightmap);
+      Blynk.virtualWrite(V2, (255-lightmap));
+    }
+    else {
+      if (millis() - millisAuto >= 3600000) { //every hour
+        //millisAuto = millis();
+        autobright = true;
+      }
+    }
   }
+
+  if (!autobright) {
+
+  }
+
 }
