@@ -873,17 +873,17 @@ Blynk.run();
     dodisplay();
     if (autobright){
     int newldr = map(lightread, 0, 25000, 255, 1);
-    newldr = constrain(newldr, 1, 255);
+    newldr = constrain(newldr, 0, 254);
 
     // Invert for gamma correction (so that 1.0 represents full brightness)
     float scale = (255 - newldr) / 255.0;  // Now, scale==1 means full brightness
 
     // Apply gamma correction with an exponent of 0.75
-    int corrected = (int)(pow(scale, 0.75) * 255);
+    int corrected = (int)(pow(scale, 0.65) * 255);
 
     // Invert back to match your wiring (0 = full brightness, 255 = off)
     newldr = 255 - corrected;
-    newldr = constrain(newldr, 1, 255);
+    newldr = constrain(newldr, 0, 254);
 
 
       analogWrite(LED_PIN, newldr);
