@@ -89,7 +89,7 @@ TFT_eSprite img3 = TFT_eSprite(&tft);
 #define LIGHTORANGE 0xFC08
 
 float p = 3.1415926;
-float lightread;
+float lightread = 10000;
 
 
 
@@ -315,7 +315,7 @@ BLYNK_WRITE(V72) {
 BLYNK_WRITE(V74) {
   brhum = param.asFloat();
 }
-BLYNK_WRITE(V76) {
+BLYNK_WRITE(V80) {
   bridgepres = param.asFloat();
 }
 BLYNK_WRITE(V77) {
@@ -865,6 +865,7 @@ int computeCalibratedLED(int lightread) {
 
 
 void setup() {
+  loadAnchors();
   pinMode(LED_PIN, OUTPUT);
   pm25in = pm25out = bridgetemp = bridgehum = iaq = windspeed = brtemp = brhum = 1.0;
   analogWrite(LED_PIN, 128);
