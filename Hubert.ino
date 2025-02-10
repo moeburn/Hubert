@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <WiFiManager.h> 
+#include <WiFiManager.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 //#include <AsyncElegantOTA.h>
@@ -10,15 +10,29 @@
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
-#include <TFT_eSPI.h> // Hardware-specific library
+#include <TFT_eSPI.h>  // Hardware-specific library
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 //REMEMBER TO EDIT USER_SETUP.h FILE!!! =================================================================================================================
 #include <SPI.h>
 #include <BlynkSimpleEsp32.h>
+#include <Preferences.h>
+
+#define MAX_ANCHORS 10
+
+struct AnchorPoint {
+  int lightread;        // The light sensor reading at which the user set the brightness
+  int blynkBrightness;  // The desired brightness shown on Blynk (0–127)
+};
+
+Preferences preferences;
+AnchorPoint anchors[MAX_ANCHORS];
+int anchorCount = 0;  // number of stored anchor points
+
+
 
 char auth[] = "8_-CN2rm4ki9P3i_NkPhxIbCiKd5RXhK";  //BLYNK
-
+bool night = false;
 
 // Include custom images
 //#include "images.h"
@@ -36,23 +50,23 @@ WidgetTerminal terminal(V20);
 //AsyncWebServer server(80);
 AsyncWebServer server2(8080);
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
-const int daylightOffset_sec = 3600;   //Replace with your daylight offset (secs)
+const long gmtOffset_sec = -18000;    //Replace with your GMT offset (secs)
+const int daylightOffset_sec = 3600;  //Replace with your daylight offset (secs)
 
 
 int hours, mins, secs;
-int brightVal= 0;
+int brightVal = 0;
 bool autobright = true;
 bool isPM = false;
 
 #define LED_PIN 13
-#define SCREEN_WIDTH  tft.width()  // 
+#define SCREEN_WIDTH tft.width()  //
 #define SCREEN_HEIGHT tft.height()
-const uint16_t MAX_ITERATION = 300; // Nombre de couleurs
+const uint16_t MAX_ITERATION = 300;  // Nombre de couleurs
 
 
 
-TFT_eSPI tft = TFT_eSPI();       // Invoke custom library
+TFT_eSPI tft = TFT_eSPI();  // Invoke custom library
 TFT_eSprite img = TFT_eSprite(&tft);
 TFT_eSprite img2 = TFT_eSprite(&tft);
 TFT_eSprite img3 = TFT_eSprite(&tft);
@@ -65,8 +79,8 @@ TFT_eSprite img3 = TFT_eSprite(&tft);
 #define GREEN 0x07E0
 #define LIGHTBLUE 0x07FF
 #define LIGHTCYAN 0x87FF
-#define LIGHTRED 0xFC18 
-#define MAGENTA  0xFC1F
+#define LIGHTRED 0xFC18
+#define MAGENTA 0xFC1F
 #define YELLOW 0xFFE0
 #define WHITE 0xFFFF
 #define GREY 0xC618
@@ -82,7 +96,7 @@ float lightread;
 int screenW = 128;
 int screenH = 64;
 int clockCenterX = screenW / 2;
-int clockCenterY = ((screenH - 16) / 2) + 20; // top yellow part is 16 px height
+int clockCenterY = ((screenH - 16) / 2) + 20;  // top yellow part is 16 px height
 int clockRadius = 18;
 
 // utility function for digital clock display: prints leading 0
@@ -90,8 +104,7 @@ String twoDigits(int digits) {
   if (digits < 10) {
     String i = '0' + String(digits);
     return i;
-  }
-  else {
+  } else {
     return String(digits);
   }
 }
@@ -99,8 +112,8 @@ String twoDigits(int digits) {
 
 
 #define every(interval) \
-    static uint32_t __every__##interval = millis(); \
-    if (millis() - __every__##interval >= interval && (__every__##interval = millis()))
+  static uint32_t __every__##interval = millis(); \
+  if (millis() - __every__##interval >= interval && (__every__##interval = millis()))
 
 
 
@@ -158,21 +171,20 @@ function updateSliderTimer(element) {
 )rawliteral";
 
 // Replaces placeholder with button section in your web page
-String processor(const String& var){
+String processor(const String& var) {
   //Serial.println(var);
-  if(var == "BUTTONPLACEHOLDER"){
+  if (var == "BUTTONPLACEHOLDER") {
     String buttons = "";
     String outputStateValue = outputState();
-    buttons+= "<p><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"output\" " + outputStateValue + "><span class=\"slider\"></span></label></p>";
+    buttons += "<p><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"output\" " + outputStateValue + "><span class=\"slider\"></span></label></p>";
     return buttons;
-  }
-  else if(var == "TIMERVALUE"){
+  } else if (var == "TIMERVALUE") {
     return timerSliderValue;
   }
   return String();
 }
 
-String outputState(){
+String outputState() {
   return "";
 }
 
@@ -192,6 +204,7 @@ BLYNK_WRITE(V20) {
     terminal.println("wifi");
     terminal.println("julia");
     terminal.println("cube");
+    terminal.println("anchors");
     terminal.println("==End of list.==");
   }
   if (String("wifi") == param.asStr()) {
@@ -205,19 +218,19 @@ BLYNK_WRITE(V20) {
   }
   if (String("julia") == param.asStr()) {
     randnum = random(0, 1000);
-    cr = randnum/1000;
+    cr = randnum / 1000;
     terminal.println("> ");
     terminal.print(cr);
     terminal.print(",");
     randnum = random(0, 500);
-    ci = randnum/1000;
+    ci = randnum / 1000;
     terminal.print(ci);
     terminal.print(",");
     randnum = random(0, 1000);
-    zooom = randnum/10;
+    zooom = randnum / 10;
     terminal.println(zooom);
     terminal.flush();
-    draw_Julia(-0.8,+0.156,zooom);
+    draw_Julia(-0.8, +0.156, zooom);
     delay(5000);
     tft.fillScreen(TFT_BLACK);
     prepdisplay();
@@ -227,6 +240,21 @@ BLYNK_WRITE(V20) {
     doCube();
     tft.fillScreen(TFT_BLACK);
     prepdisplay();
+  }
+  if (String("anchors") == param.asStr()) {
+    terminal.println("Existing anchor points: ");
+    if (anchorCount == 0) {
+      terminal.println("No anchors stored.");
+    } else {
+      for (int i = 0; i < anchorCount; i++) {
+        terminal.print("Anchor ");
+        terminal.print(i);
+        terminal.print(" - Lightread: ");
+        terminal.print(anchors[i].lightread);
+        terminal.print(", User Brightness: ");
+        terminal.println(anchors[i].blynkBrightness);
+      }
+    }
   }
   terminal.flush();
 }
@@ -273,7 +301,7 @@ BLYNK_WRITE(V75) {
 }
 BLYNK_WRITE(V78) {
   float ws = param.asFloat();
-  if (!isnan(ws)){
+  if (!isnan(ws)) {
     windspeed = ws;
   }
 }
@@ -304,7 +332,7 @@ BLYNK_WRITE(V82) {
 }
 
 BLYNK_WRITE(V83) {
-  lightread  = param.asFloat();
+  lightread = param.asFloat();
 }
 
 uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
@@ -313,51 +341,54 @@ uint16_t RGBto565(uint8_t r, uint8_t g, uint8_t b) {
 
 float pmR, pmG, pmB;
 float pmR2, pmG2, pmB2;
-float  pmR3, pmG3, pmB3;
+float pmR3, pmG3, pmB3;
 float pmR4, pmG4, pmB4;
 
 void prepdisplay() {
-        tft.drawFastHLine(0, 24, 128, TFT_WHITE);
-          tft.setTextSize(1);
+  tft.drawFastHLine(0, 24, 128, TFT_WHITE);
+  tft.setTextSize(1);
   tft.setTextColor(YELLOW);
-  tft.setCursor(0,121);
+  tft.setCursor(0, 121);
   //////////"/////////////////////"
   tft.print("PMin/PMout/KW/IAQ/CO2");
 }
 
-void getVocColor(int voc_index, uint8_t &r, uint8_t &g, uint8_t &b) {
-    float bright = 0.75;
-    if (voc_index < 150) {
-        r = 0; g = 255; b = 0;
-    } else if (voc_index < 250) {
-        r = map(voc_index, 150, 250, 0, 255);
-        g = 255; b = 0;
-    } else if (voc_index < 400) {
-        r = 255;
-        g = map(voc_index, 250, 400, 255, 128);
-        b = 0;
-    } else {
-        r = 255;
-        g = map(voc_index, 400, 500, 128, 0);
-        b = 0;
-    }
+void getVocColor(int voc_index, uint8_t& r, uint8_t& g, uint8_t& b) {
+  float bright = 0.75;
+  if (voc_index < 150) {
+    r = 0;
+    g = 255;
+    b = 0;
+  } else if (voc_index < 250) {
+    r = map(voc_index, 150, 250, 0, 255);
+    g = 255;
+    b = 0;
+  } else if (voc_index < 400) {
+    r = 255;
+    g = map(voc_index, 250, 400, 255, 128);
+    b = 0;
+  } else {
+    r = 255;
+    g = map(voc_index, 400, 500, 128, 0);
+    b = 0;
+  }
   b = voc_index - 155;
-  if (b < 0) {b = 0;}
-  b *= (255.0/155.0);
+  if (b < 0) { b = 0; }
+  b *= (255.0 / 155.0);
 
   r *= bright;
   g *= bright;
   b *= bright;
-  if (r > 255) {r = 255;}
-  if (g > 255) {g = 255;}
-  if (b > 255) {b = 255;}
+  if (r > 255) { r = 255; }
+  if (g > 255) { g = 255; }
+  if (b > 255) { b = 255; }
 }
 
 void dodisplay() {
 
   float CO2center = 1000.0;
   float brightness = 0.75;
-  
+
   pmG = 55 - pm25in;
   if (pmG < 0) { pmG = 0; }
   pmG *= (200.0 / 55.0);
@@ -375,7 +406,7 @@ void dodisplay() {
   pmB *= (255.0 / 55.0);
   if (pmB > 255) { pmB = 255; }
   pmB *= brightness;
-//===============================
+  //===============================
   pmG2 = 55 - pm25out;
   if (pmG2 < 0) { pmG2 = 0; }
   pmG2 *= (200.0 / 55.0);
@@ -393,102 +424,97 @@ void dodisplay() {
   pmB2 *= (255.0 / 55.0);
   if (pmB2 > 255) { pmB2 = 255; }
   pmB2 *= brightness;
-//================================
+  //================================
   pmG3 = 250 - iaq;
-  if (pmG3 < 0) {pmG3 = 0;}
-  pmG3 *= (255.0/250.0);
-  if (pmG3 > 255) {pmG3 = 255;}
+  if (pmG3 < 0) { pmG3 = 0; }
+  pmG3 *= (255.0 / 250.0);
+  if (pmG3 > 255) { pmG3 = 255; }
   pmG3 *= brightness;
-  
+
   pmR3 = iaq;
-  if (pmR3 < 0) {pmR3 = 0;}
-  pmR3 *= (255.0/250.0);
-  if (pmR3 > 255) {pmR3 = 255;}
+  if (pmR3 < 0) { pmR3 = 0; }
+  pmR3 *= (255.0 / 250.0);
+  if (pmR3 > 255) { pmR3 = 255; }
   pmR3 *= brightness;
-  
+
   pmB3 = iaq - 250;
-  if (pmB3 < 0) {pmB3 = 0;}
-  pmB3 *= (255.0/250.0);
-  if (pmB3 > 255) {pmB3 = 255;}
+  if (pmB3 < 0) { pmB3 = 0; }
+  pmB3 *= (255.0 / 250.0);
+  if (pmB3 > 255) { pmB3 = 255; }
   pmB3 *= brightness;
   //getVocColor(iaq, pmR3, pmG3, pmB3);
-//================================
-  pmG4 = CO2center - (bridgeco2-400);
-  if (pmG4 < 0) {pmG4 = 0;}
-  pmG4 *= (255.0/CO2center);
-  if (pmG4 > 255) {pmG4 = 255;}
+  //================================
+  pmG4 = CO2center - (bridgeco2 - 400);
+  if (pmG4 < 0) { pmG4 = 0; }
+  pmG4 *= (255.0 / CO2center);
+  if (pmG4 > 255) { pmG4 = 255; }
   pmG4 *= brightness;
-  
-  pmR4 = (bridgeco2-400);
-  if (pmR4 < 0) {pmR4 = 0;}
-  pmR4 *= (255.0/CO2center);
-  if (pmR4 > 255) {pmR4 = 255;}
+
+  pmR4 = (bridgeco2 - 400);
+  if (pmR4 < 0) { pmR4 = 0; }
+  pmR4 *= (255.0 / CO2center);
+  if (pmR4 > 255) { pmR4 = 255; }
   pmR4 *= brightness;
-  
-  pmB4 = (bridgeco2-400) - CO2center;
-  if (pmB4 < 0) {pmB4 = 0;}
-  pmB4 *= (255.0/CO2center);
-  if (pmB4 > 255) {pmB4 = 255;}
+
+  pmB4 = (bridgeco2 - 400) - CO2center;
+  if (pmB4 < 0) { pmB4 = 0; }
+  pmB4 *= (255.0 / CO2center);
+  if (pmB4 > 255) { pmB4 = 255; }
   pmB4 *= brightness;
 
-    struct tm timeinfo;
+  struct tm timeinfo;
   getLocalTime(&timeinfo);
   hours = timeinfo.tm_hour;
   mins = timeinfo.tm_min;
   secs = timeinfo.tm_sec;
 
-  if ((hours < 8) && (!isSleeping)){
-    for(int i=brightVal; i<255; i++)
-    {
+  if ((hours < 8) && (!isSleeping)) {
+    for (int i = brightVal; i < 255; i++) {
       analogWrite(LED_PIN, i);
       delay(40);
     }
     analogWrite(LED_PIN, 255);
     isSleeping = true;
   }
-    if ((hours >= 8) && (isSleeping)){
-    for (int i=255; i>brightVal; i--)
-      {
-        analogWrite(LED_PIN, i);
-        delay(40);
-      }
-      analogWrite(LED_PIN, brightVal);
+  if ((hours >= 8) && (isSleeping)) {
+    for (int i = 255; i > brightVal; i--) {
+      analogWrite(LED_PIN, i);
+      delay(40);
+    }
+    analogWrite(LED_PIN, brightVal);
     isSleeping = false;
   }
 
-    if (hours > 12) {
+  if (hours > 12) {
     hours -= 12;
     isPM = true;
   } else {
     isPM = false;
   }
-  if (hours == 12) {isPM = true;}
-  if (hours == 0) {hours = 12;}
-  
+  if (hours == 12) { isPM = true; }
+  if (hours == 0) { hours = 12; }
+
 
   tft.setCursor(64, 1);
   tft.setTextDatum(TC_DATUM);
   tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
   tft.setTextSize(3);
 
-//String timenow = String(hours) + ":" + twoDigits(mins);
-if (hours < 10) {
-  if (isPM) {
+  //String timenow = String(hours) + ":" + twoDigits(mins);
+  if (hours < 10) {
+    if (isPM) {
       String timenow = String(hours) + ":" + twoDigits(mins) + " PM";
       tft.drawString(timenow, 64, 0);
-    } 
-    else {
-      String timenow = String(hours) + ":" + twoDigits(mins) +  " AM";
+    } else {
+      String timenow = String(hours) + ":" + twoDigits(mins) + " AM";
       tft.drawString(timenow, 64, 0);
     }
-  }
-  else {
-        if (isPM) {
+  } else {
+    if (isPM) {
       String timenow = String(hours) + ":" + twoDigits(mins) + "PM";
       tft.drawString(timenow, 64, 0);
-    } 
-    else {
-      String timenow = String(hours) + ":" + twoDigits(mins) +  "AM";
+    } else {
+      String timenow = String(hours) + ":" + twoDigits(mins) + "AM";
       tft.drawString(timenow, 64, 0);
     }
   }
@@ -504,18 +530,16 @@ if (hours < 10) {
   if (bridgetemp > 15) {
     img2.setTextColor(LIGHTCYAN);
     img2.println("oH:");
-  }
-  else
-  {
+  } else {
     img2.setTextColor(LIGHTORANGE);
-    img2.println("P:");    
+    img2.println("P:");
   }
   img2.setTextColor(LIGHTGREEN);
   img2.println("Ws:");
-  img2.pushSprite(0,28);
+  img2.pushSprite(0, 28);
 
   img.fillSprite(TFT_BLACK);
-  img.setCursor(0,0);
+  img.setCursor(0, 0);
   img.setTextSize(2);
   img.setTextColor(TFT_BLUE, TFT_BLACK);
   img.setTextDatum(TR_DATUM);
@@ -524,11 +548,11 @@ if (hours < 10) {
   img.drawCircle(72, 3, 2, LIGHTRED);
   img.drawCircle(72, 3, 3, LIGHTRED);
   img.setTextColor(LIGHTRED);
-  img.drawString(stringtodraw, 90,0);
+  img.drawString(stringtodraw, 90, 0);
   ypos += img.fontHeight();
   stringtodraw = String(brhum, 2) + "g";
   img.setTextColor(LIGHTBLUE);
-  img.drawString(stringtodraw, 90,ypos);
+  img.drawString(stringtodraw, 90, ypos);
   ypos += img.fontHeight();
   float min1 = min(neotemp, jojutemp);
   temptodraw = min(bridgetemp, min1);
@@ -536,30 +560,29 @@ if (hours < 10) {
   img.drawCircle(72, 35, 2, MAGENTA);
   img.drawCircle(72, 35, 3, MAGENTA);
   img.setTextColor(MAGENTA);
-  img.drawString(stringtodraw, 90,ypos);
+  img.drawString(stringtodraw, 90, ypos);
   ypos += img.fontHeight();
   if (bridgetemp > 15) {
     stringtodraw = String(bridgehum, 2) + "g";
     img.setTextColor(LIGHTCYAN);
-    img.drawString(stringtodraw, 90,ypos);
-  }
-  else {
+    img.drawString(stringtodraw, 90, ypos);
+  } else {
     stringtodraw = String(bridgepres, 1) + "mb";
     img.setTextColor(LIGHTORANGE);
-    img.drawString(stringtodraw, 90,ypos);    
+    img.drawString(stringtodraw, 90, ypos);
   }
   ypos += img.fontHeight();
   stringtodraw = String(windspeed, 1) + "kph";
   img.setTextColor(LIGHTGREEN);
-  img.drawString(stringtodraw, 90,ypos);
+  img.drawString(stringtodraw, 90, ypos);
   img.pushSprite(38, 28);
 
   img3.fillSprite(TFT_BLACK);
-  img3.setCursor(0,0);
+  img3.setCursor(0, 0);
   img3.setTextFont(2);
   img3.setTextSize(1);
   img3.setTextDatum(TL_DATUM);
- img3.setTextColor(WHITE, RGBto565(pmR, pmG, pmB));
+  img3.setTextColor(WHITE, RGBto565(pmR, pmG, pmB));
   img3.drawFloat(pm25in, 0, 0, 0);
   //img3.print(" ");
   img3.setTextDatum(TC_DATUM);
@@ -568,12 +591,15 @@ if (hours < 10) {
   //if (pm25out < 10) {img3.print(" ");}
   //if (pm25in >= 10) {img3.print(pm25out, 1);} else {img3.print(pm25out, 2);}
   img3.drawFloat(pm25out, 0, 26, 0);
-//  img3.setTextDatum(TC_DATUM);
+  //  img3.setTextDatum(TC_DATUM);
   //img3.setCursor(128,0);
   img3.setTextColor(WHITE);
-  int watts_x = 52; //because I cite it twice in the if/else statement:
-  if (watts < 1000) {img3.drawFloat(watts, 0, watts_x, 0);}
-  else {img3.drawFloat(kw, 1, watts_x, 0);}
+  int watts_x = 52;  //because I cite it twice in the if/else statement:
+  if (watts < 1000) {
+    img3.drawFloat(watts, 0, watts_x, 0);
+  } else {
+    img3.drawFloat(kw, 1, watts_x, 0);
+  }
   img3.setTextColor(WHITE, RGBto565(pmR3, pmG3, pmB3));
   img3.drawFloat(iaq, 0, 80, 0);
   //img3.print(iaq);
@@ -586,37 +612,38 @@ if (hours < 10) {
 
 void draw_Julia(float c_r, float c_i, float zoom) {
 
-  tft.setCursor(0,0);
+  tft.setCursor(0, 0);
   float new_r = 0.0, new_i = 0.0, old_r = 0.0, old_i = 0.0;
 
   /* Pour chaque pixel en X */
 
-  for(int16_t x = SCREEN_WIDTH/2 - 1; x >= 0; x--) { // Rely on inverted symettry
+  for (int16_t x = SCREEN_WIDTH / 2 - 1; x >= 0; x--) {  // Rely on inverted symettry
     /* Pour chaque pixel en Y */
-    for(uint16_t y = 0; y < SCREEN_HEIGHT; y++) {      
+    for (uint16_t y = 0; y < SCREEN_HEIGHT; y++) {
       old_r = 1.5 * (x - SCREEN_WIDTH / 2) / (0.5 * zoom * SCREEN_WIDTH);
       old_i = (y - SCREEN_HEIGHT / 2) / (0.5 * zoom * SCREEN_HEIGHT);
       uint16_t i = 0;
 
       while ((old_r * old_r + old_i * old_i) < 4.0 && i < MAX_ITERATION) {
-        new_r = old_r * old_r - old_i * old_i ;
+        new_r = old_r * old_r - old_i * old_i;
         new_i = 2.0 * old_r * old_i;
 
-        old_r = new_r+c_r;
-        old_i = new_i+c_i;
-        
+        old_r = new_r + c_r;
+        old_i = new_i + c_i;
+
         i++;
       }
       /* Affiche le pixel */
-      if (i < 100){
-        tft.drawPixel(x,y,tft.color565(255,255,map(i,0,100,255,0)));
-        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(255,255,map(i,0,100,255,0)));
-      }if(i<200){
-        tft.drawPixel(x,y,tft.color565(255,map(i,100,200,255,0),0));
-        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(255,map(i,100,200,255,0),0));
-      }else{
-        tft.drawPixel(x,y,tft.color565(map(i,200,300,255,0),0,0));
-        tft.drawPixel(SCREEN_WIDTH - x - 1,SCREEN_HEIGHT - y - 1,tft.color565(map(i,200,300,255,0),0,0));
+      if (i < 100) {
+        tft.drawPixel(x, y, tft.color565(255, 255, map(i, 0, 100, 255, 0)));
+        tft.drawPixel(SCREEN_WIDTH - x - 1, SCREEN_HEIGHT - y - 1, tft.color565(255, 255, map(i, 0, 100, 255, 0)));
+      }
+      if (i < 200) {
+        tft.drawPixel(x, y, tft.color565(255, map(i, 100, 200, 255, 0), 0));
+        tft.drawPixel(SCREEN_WIDTH - x - 1, SCREEN_HEIGHT - y - 1, tft.color565(255, map(i, 100, 200, 255, 0), 0));
+      } else {
+        tft.drawPixel(x, y, tft.color565(map(i, 200, 300, 255, 0), 0, 0));
+        tft.drawPixel(SCREEN_WIDTH - x - 1, SCREEN_HEIGHT - y - 1, tft.color565(map(i, 200, 300, 255, 0), 0, 0));
       }
     }
   }
@@ -657,7 +684,7 @@ int r[] = {
 };
 
 void doCube() {
-delay(16);
+  delay(16);
   for (int k = 0; k < 400; k++) {
     //tft.fillScreen(TFT_BLACK);
     r[0] = r[0] + 1;
@@ -704,61 +731,191 @@ delay(16);
 
 
 
- 
-void setup()
-{
+void loadAnchors() {
+  preferences.begin("calib", true); // read‑only
+  anchorCount = preferences.getInt("count", 0);
+  for (int i = 0; i < anchorCount; i++) {
+    String key = "pt" + String(i);
+    // Convert key to const char* using .c_str()
+    String value = preferences.getString(key.c_str(), "");
+    // Expected format: "lightread,blynkBrightness", e.g., "19000,150"
+    int commaIndex = value.indexOf(',');
+    if (commaIndex > 0) {
+      anchors[i].lightread = value.substring(0, commaIndex).toInt();
+      anchors[i].blynkBrightness = value.substring(commaIndex + 1).toInt();
+    }
+  }
+  preferences.end();
+}
+
+void saveAnchors() {
+  preferences.begin("calib", false); // write mode
+  preferences.putInt("count", anchorCount);
+  for (int i = 0; i < anchorCount; i++) {
+    String key = "pt" + String(i);
+    String value = String(anchors[i].lightread) + "," + String(anchors[i].blynkBrightness);
+    // Again, convert key to const char* using .c_str()
+    preferences.putString(key.c_str(), value);
+  }
+  preferences.end();
+}
+
+
+// Adds a new anchor point (keeping only the most recent MAX_ANCHORS)
+// You might also want to sort them by lightread.
+void addAnchorPoint(int lightread, int userBlynkBrightness) {
+  // For simplicity, add the new anchor at the end.
+  if (anchorCount < MAX_ANCHORS) {
+    anchors[anchorCount].lightread = lightread;
+    anchors[anchorCount].blynkBrightness = userBlynkBrightness;
+    anchorCount++;
+  } else {
+    // If already MAX_ANCHORS, shift left and insert at the end
+    for (int i = 1; i < MAX_ANCHORS; i++) {
+      anchors[i-1] = anchors[i];
+    }
+    anchors[MAX_ANCHORS-1].lightread = lightread;
+    anchors[MAX_ANCHORS-1].blynkBrightness = userBlynkBrightness;
+  }
+  saveAnchors();
+}
+
+int computeDefaultLED(int lightread) {
+  // (Using your previous mapping, normalization, and gamma correction)
+  // For example:
+  float GAMMA = 0.5;
+  int MAX_LDR = 25000;
+  int MIN_LDR = 0;
+  int MAX_OUT = 254;  // dimmest (LED_PIN value)
+  int MIN_OUT = 128;  // brightest
+  
+  // Map lightread linearly to the output range
+  int newldr = map(lightread, MIN_LDR, MAX_LDR, MAX_OUT, MIN_OUT);
+  newldr = constrain(newldr, MIN_OUT, MAX_OUT);
+  
+  // Normalize to 0–1 (with MIN_OUT = 0 and MAX_OUT = 1)
+  float norm = float(newldr - MIN_OUT) / float(MAX_OUT - MIN_OUT);
+  
+  // Apply gamma correction in normalized space
+  float norm_corr = pow(norm, GAMMA);
+  
+  // Convert back to the LED output range
+  int ledValue = round(norm_corr * (MAX_OUT - MIN_OUT) + MIN_OUT);
+  return ledValue;
+}
+
+int computeCalibratedLED(int lightread) {
+  int defaultLED = computeDefaultLED(lightread);
+  int defaultBlynk = 255 - defaultLED; // our auto brightness in Blynk space
+  
+  // If there are no anchors, return the default value
+  if (anchorCount == 0) {
+    return defaultLED;
+  }
+  
+  int offset = 0;
+  // If there's only one anchor, use its offset as a constant correction:
+  if (anchorCount == 1) {
+    int defaultBlynkAtAnchor = 255 - computeDefaultLED(anchors[0].lightread);
+    offset = anchors[0].blynkBrightness - defaultBlynkAtAnchor;
+  } else {
+    // If there are multiple anchors, find the two anchors that bracket this lightread.
+    // If lightread is below the first anchor, use the first anchor’s offset.
+    // If above the last anchor, use the last anchor’s offset.
+    AnchorPoint lower, upper;
+    if (lightread <= anchors[0].lightread) {
+      lower = anchors[0];
+      upper = anchors[0];
+    } else if (lightread >= anchors[anchorCount - 1].lightread) {
+      lower = anchors[anchorCount - 1];
+      upper = anchors[anchorCount - 1];
+    } else {
+      // Otherwise, find two anchors where: lower.lightread <= lightread <= upper.lightread.
+      for (int i = 0; i < anchorCount - 1; i++) {
+        if (lightread >= anchors[i].lightread && lightread <= anchors[i+1].lightread) {
+          lower = anchors[i];
+          upper = anchors[i+1];
+          break;
+        }
+      }
+    }
+    
+    // Compute the offset at each anchor (in Blynk space)
+    int defBlynkLower = 255 - computeDefaultLED(lower.lightread);
+    int defBlynkUpper = 255 - computeDefaultLED(upper.lightread);
+    int offsetLower = lower.blynkBrightness - defBlynkLower;
+    int offsetUpper = upper.blynkBrightness - defBlynkUpper;
+    
+    // Linear interpolation for the offset based on the lightread position between the two anchors:
+    float fraction = 0.0;
+    if (upper.lightread != lower.lightread)
+      fraction = float(lightread - lower.lightread) / float(upper.lightread - lower.lightread);
+    offset = offsetLower + (offsetUpper - offsetLower) * fraction;
+  }
+  
+  // Apply the computed offset to the default Blynk brightness:
+  int calibratedBlynk = defaultBlynk + offset;
+  
+  // Now invert back to get the LED brightness value:
+  int calibratedLED = 255 - calibratedBlynk;
+  
+  // (Optionally, you can ensure calibratedLED stays within your allowed range.)
+  return calibratedLED;
+}
+
+
+void setup() {
   pinMode(LED_PIN, OUTPUT);
   pm25in = pm25out = bridgetemp = bridgehum = iaq = windspeed = brtemp = brhum = 1.0;
-    analogWrite(LED_PIN, 128);
-      Serial.begin(115200);
-    tft.init();
-    tft.fillScreen(TFT_BLACK);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
-      tft.setTextWrap(true); // Wrap on width
-          tft.setCursor(0, 0);
-          tft.println("Connecting to wifi...");
-      WiFi.mode(WIFI_STA);
-      WiFiManager wm;
-      bool res;
-      // res = wm.autoConnect(); // auto generated AP name from chipid
-       res = wm.autoConnect("HubertSetup"); // anonymous ap
+  analogWrite(LED_PIN, 128);
+  Serial.begin(115200);
+  tft.init();
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
+  tft.setTextWrap(true);  // Wrap on width
+  tft.setCursor(0, 0);
+  tft.println("Connecting to wifi...");
+  WiFi.mode(WIFI_STA);
+  WiFiManager wm;
+  bool res;
+  // res = wm.autoConnect(); // auto generated AP name from chipid
+  res = wm.autoConnect("HubertSetup");  // anonymous ap
 
 
-      if(!res) {
-          tft.fillScreen(TFT_RED);
-          tft.setCursor(0, 0);
-          tft.println("Failed to connect, restarting");
-          delay(3000);
-          ESP.restart();
-      } 
-    else {
-        //if you get here you have connected to the WiFi    
-        tft.fillScreen(TFT_GREEN);
-        tft.setCursor(0, 0);
-        tft.println("Connected!");
-        tft.println(WiFi.localIP());
-        delay(3000);
-      }
-      //WiFi.begin(ssid, password);
-      tft.fillScreen(TFT_BLACK);
-      tft.setCursor(0, 0);
+  if (!res) {
+    tft.fillScreen(TFT_RED);
+    tft.setCursor(0, 0);
+    tft.println("Failed to connect, restarting");
+    delay(3000);
+    ESP.restart();
+  } else {
+    //if you get here you have connected to the WiFi
+    tft.fillScreen(TFT_GREEN);
+    tft.setCursor(0, 0);
+    tft.println("Connected!");
+    tft.println(WiFi.localIP());
+    delay(3000);
+  }
+  //WiFi.begin(ssid, password);
+  tft.fillScreen(TFT_BLACK);
+  tft.setCursor(0, 0);
 
-      tft.print("Connecting to Blynk...");
-      /*while (WiFi.status() != WL_CONNECTED) {
+  tft.print("Connecting to Blynk...");
+  /*while (WiFi.status() != WL_CONNECTED) {
         delay(250);
         tft.print(".");
       }*/
-      Blynk.config(auth, IPAddress(216,110,224,105), 8080);
-      Blynk.connect();
-      //display.display();
+  Blynk.config(auth, IPAddress(216, 110, 224, 105), 8080);
+  Blynk.connect();
+  //display.display();
 
-      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-      struct tm timeinfo;
-      getLocalTime(&timeinfo);
-      hours = timeinfo.tm_hour;
-      mins = timeinfo.tm_min;
-      secs = timeinfo.tm_sec;
-        terminal.println("***Hubert the Clock v1.4***");
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  hours = timeinfo.tm_hour;
+  mins = timeinfo.tm_min;
+  secs = timeinfo.tm_sec;
+  terminal.println("***Hubert the Clock v1.4***");
 
   terminal.print("Connected to ");
   terminal.println(ssid);
@@ -769,71 +926,73 @@ void setup()
   terminal.flush();
 
 
-      //AsyncElegantOTA.begin(&server);    // Start ElegantOTA
+  //AsyncElegantOTA.begin(&server);    // Start ElegantOTA
 
-      server2.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send_P(200, "text/html", index_html, processor);
-      });
+  server2.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send_P(200, "text/html", index_html, processor);
+  });
 
-      // Send a GET request to <ESP_IP>/update?state=<inputMessage>
-      server2.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
-        String inputMessage;
-        // GET input1 value on <ESP_IP>/update?state=<inputMessage>
-        if (request->hasParam(PARAM_INPUT_1)) {
-          inputMessage = request->getParam(PARAM_INPUT_1)->value();
-          digitalWrite(output, inputMessage.toInt());
-        }
-        else {
-          inputMessage = "No message sent";
-        }
-        Serial.println(inputMessage);
-        request->send(200, "text/plain", "OK");
-      });
-      
-      // Send a GET request to <ESP_IP>/slider?value=<inputMessage>
-      server2.on("/slider", HTTP_GET, [] (AsyncWebServerRequest *request) {
-        String inputMessage;
-        // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
-        if (request->hasParam(PARAM_INPUT_2)) {
-          inputMessage = request->getParam(PARAM_INPUT_2)->value();
-          brightVal = 255 - inputMessage.toInt();
-          analogWrite(LED_PIN, brightVal);
-          Blynk.virtualWrite(V2, (255-brightVal));
-          autobright = false;
-          millisAuto = millis();
-          timerSliderValue = inputMessage;
-        }
-        else {
-          inputMessage = "No message sent";
-        }
-        Serial.println(inputMessage);
+  // Send a GET request to <ESP_IP>/update?state=<inputMessage>
+  server2.on("/update", HTTP_GET, [](AsyncWebServerRequest* request) {
+    String inputMessage;
+    // GET input1 value on <ESP_IP>/update?state=<inputMessage>
+    if (request->hasParam(PARAM_INPUT_1)) {
+      inputMessage = request->getParam(PARAM_INPUT_1)->value();
+      digitalWrite(output, inputMessage.toInt());
+    } else {
+      inputMessage = "No message sent";
+    }
+    Serial.println(inputMessage);
+    request->send(200, "text/plain", "OK");
+  });
+
+  // Send a GET request to <ESP_IP>/slider?value=<inputMessage>
+  server2.on("/slider", HTTP_GET, [](AsyncWebServerRequest* request) {
+    String inputMessage;
+    // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
+    if (request->hasParam(PARAM_INPUT_2)) {
+        inputMessage = request->getParam(PARAM_INPUT_2)->value();
+        // The user sends a brightness value (Blynk brightness); invert it for LED:
+        int manualLED = 255 - inputMessage.toInt();
+        analogWrite(LED_PIN, manualLED);
+        Blynk.virtualWrite(V2, (255 - manualLED));
+        //autobright = false;
+        //millisAuto = millis();
+        timerSliderValue = inputMessage;
         
-        request->send(200, "text/plain", "OK");
-      });
-      
-      // Start server
-      server2.begin();
 
-      ArduinoOTA.setHostname("Hubert");
-      ArduinoOTA.begin();
-      Serial.println("");
-      Serial.print("Connected to ");
-      Serial.println(ssid);
-      Serial.print("IP address: ");
-      Serial.println(WiFi.localIP());
-      analogWrite(LED_PIN, 1);
-    tft.fillScreen(TFT_BLACK);
-    //tft.drawRect(0,0,128,128, TFT_WHITE);
-      img.createSprite(90, 79);
-      img.fillSprite(TFT_BLACK);
-      img2.createSprite(38, 79);
-      img2.fillSprite(TFT_BLACK);
-      img3.createSprite(128, 14);
-      img3.fillSprite(TFT_BLACK);
-prepdisplay();
+        // Here, user brightness (as seen on Blynk) is inputMessage.toInt()
+        addAnchorPoint(lightread, inputMessage.toInt());
+    } else {
+      inputMessage = "No message sent";
+    }
+    Serial.println(inputMessage);
+
+    request->send(200, "text/plain", "OK");
+  });
+
+  // Start server
+  server2.begin();
+
+  ArduinoOTA.setHostname("Hubert");
+  ArduinoOTA.begin();
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  analogWrite(LED_PIN, 1);
+  tft.fillScreen(TFT_BLACK);
+  //tft.drawRect(0,0,128,128, TFT_WHITE);
+  img.createSprite(90, 79);
+  img.fillSprite(TFT_BLACK);
+  img2.createSprite(38, 79);
+  img2.fillSprite(TFT_BLACK);
+  img3.createSprite(128, 14);
+  img3.fillSprite(TFT_BLACK);
+  prepdisplay();
   dodisplay();
-  for (int i=255; i>0; i--)
-  {
+  for (int i = 255; i > 0; i--) {
     analogWrite(LED_PIN, i);
     delay(10);
   }
@@ -863,34 +1022,20 @@ outdoors:
 ===============*/
 
 void loop() {
-ArduinoOTA.handle();
-Blynk.run();
-      
+  ArduinoOTA.handle();
+  Blynk.run();
 
-    if (millis() - millisBlynk >= 10000)  //if it's been X milliseconds
+
+  if (millis() - millisBlynk >= 10000)  //if it's been X milliseconds
   {
     millisBlynk = millis();
     dodisplay();
-    if (autobright){
-    int newldr = map(lightread, 0, 25000, 255, 1);
-    newldr = constrain(newldr, 0, 254);
-
-    // Invert for gamma correction (so that 1.0 represents full brightness)
-    float scale = (255 - newldr) / 255.0;  // Now, scale==1 means full brightness
-
-    // Apply gamma correction with an exponent of 0.75
-    int corrected = (int)(pow(scale, 0.65) * 255);
-
-    // Invert back to match your wiring (0 = full brightness, 255 = off)
-    newldr = 255 - corrected;
-    newldr = constrain(newldr, 0, 254);
-
-
-      analogWrite(LED_PIN, newldr);
-      Blynk.virtualWrite(V2, (corrected));
-    }
-    else {
-      if (millis() - millisAuto >= 3600000) { //every hour
+    if ((autobright) && (!isSleeping)) {
+      int ledVal = computeCalibratedLED(lightread);
+      analogWrite(LED_PIN, ledVal);
+      Blynk.virtualWrite(V2, 255 - ledVal);
+    } else if (!autobright) {
+      if (millis() - millisAuto >= 3600000) {  //every hour
         //millisAuto = millis();
         autobright = true;
       }
@@ -898,7 +1043,5 @@ Blynk.run();
   }
 
   if (!autobright) {
-
   }
-
 }
