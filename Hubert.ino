@@ -783,11 +783,11 @@ void addAnchorPoint(int lightread, int userBlynkBrightness) {
 int computeDefaultLED(int lightread) {
   // (Using your previous mapping, normalization, and gamma correction)
   // For example:
-  float GAMMA = 0.5;
-  int MAX_LDR = 25000;
+  float GAMMA = 2;
+  int MAX_LDR = 21000;
   int MIN_LDR = 0;
   int MAX_OUT = 254;  // dimmest (LED_PIN value)
-  int MIN_OUT = 128;  // brightest
+  int MIN_OUT = 98;  // brightest
   
   // Map lightread linearly to the output range
   int newldr = map(lightread, MIN_LDR, MAX_LDR, MAX_OUT, MIN_OUT);
@@ -1034,6 +1034,7 @@ void loop() {
     if ((autobright) && (!isSleeping)) {
       int ledVal = computeCalibratedLED(lightread);
       analogWrite(LED_PIN, ledVal);
+      timerSliderValue = String(255-ledVal);
       Blynk.virtualWrite(V2, 255 - ledVal);
     } else if (!autobright) {
       if (millis() - millisAuto >= 3600000) {  //every hour
