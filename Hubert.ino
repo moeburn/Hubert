@@ -205,6 +205,7 @@ BLYNK_WRITE(V20) {
     terminal.println("julia");
     terminal.println("cube");
     terminal.println("anchors");
+    terminal.println("clear");
     terminal.println("==End of list.==");
   }
   if (String("wifi") == param.asStr()) {
@@ -255,6 +256,10 @@ BLYNK_WRITE(V20) {
         terminal.println(anchors[i].blynkBrightness);
       }
     }
+  }
+  if (String("clear") == param.asStr()) {
+    clearAnchors();
+    terminal.print("Anchors cleared.");
   }
   terminal.flush();
 }
@@ -787,7 +792,7 @@ int computeDefaultLED(int lightread) {
   int MAX_LDR = 21000;
   int MIN_LDR = 0;
   int MAX_OUT = 254;  // dimmest (LED_PIN value)
-  int MIN_OUT = 98;  // brightest
+  int MIN_OUT = 80;  // brightest
   
   // Map lightread linearly to the output range
   int newldr = map(lightread, MIN_LDR, MAX_LDR, MAX_OUT, MIN_OUT);
@@ -804,64 +809,75 @@ int computeDefaultLED(int lightread) {
   return ledValue;
 }
 
+void clearAnchors() {
+  // Open Preferences in write mode for your calibration namespace ("calib")
+  preferences.begin("calib", false);
+  
+  // Clear all keys stored in this namespace
+  preferences.clear();
+  
+  // End the preferences session
+  preferences.end();
+  
+  // Reset your in-memory anchor count (and optionally, clear the anchors array)
+  anchorCount = 0;
+}
+
+// Returns the calibrated LED brightness value based on the current lightread.
+// This version uses inverse-distance weighting to blend offsets from all anchors.
 int computeCalibratedLED(int lightread) {
   int defaultLED = computeDefaultLED(lightread);
   int defaultBlynk = 255 - defaultLED; // our auto brightness in Blynk space
-  
-  // If there are no anchors, return the default value
+
+  // If no anchors exist, just return the default LED value.
   if (anchorCount == 0) {
     return defaultLED;
   }
-  
-  int offset = 0;
-  // If there's only one anchor, use its offset as a constant correction:
-  if (anchorCount == 1) {
-    int defaultBlynkAtAnchor = 255 - computeDefaultLED(anchors[0].lightread);
-    offset = anchors[0].blynkBrightness - defaultBlynkAtAnchor;
-  } else {
-    // If there are multiple anchors, find the two anchors that bracket this lightread.
-    // If lightread is below the first anchor, use the first anchor’s offset.
-    // If above the last anchor, use the last anchor’s offset.
-    AnchorPoint lower, upper;
-    if (lightread <= anchors[0].lightread) {
-      lower = anchors[0];
-      upper = anchors[0];
-    } else if (lightread >= anchors[anchorCount - 1].lightread) {
-      lower = anchors[anchorCount - 1];
-      upper = anchors[anchorCount - 1];
-    } else {
-      // Otherwise, find two anchors where: lower.lightread <= lightread <= upper.lightread.
-      for (int i = 0; i < anchorCount - 1; i++) {
-        if (lightread >= anchors[i].lightread && lightread <= anchors[i+1].lightread) {
-          lower = anchors[i];
-          upper = anchors[i+1];
-          break;
-        }
-      }
+
+  float weightedOffsetSum = 0.0;
+  float totalWeight = 0.0;
+  const float epsilon = 1.0; // small constant to avoid division by zero
+
+  // Loop over all stored anchors
+  for (int i = 0; i < anchorCount; i++) {
+    // Compute absolute distance between the current lightread and the anchor's lightread.
+    float distance = abs(lightread - anchors[i].lightread);
+    
+    // If the current reading is extremely close to an anchor, use that anchor's offset exclusively.
+    if (distance < 1) {
+      int defBlynkAtAnchor = 255 - computeDefaultLED(anchors[i].lightread);
+      int anchorOffset = anchors[i].blynkBrightness - defBlynkAtAnchor;
+      weightedOffsetSum = anchorOffset;
+      totalWeight = 1;
+      break;
     }
     
-    // Compute the offset at each anchor (in Blynk space)
-    int defBlynkLower = 255 - computeDefaultLED(lower.lightread);
-    int defBlynkUpper = 255 - computeDefaultLED(upper.lightread);
-    int offsetLower = lower.blynkBrightness - defBlynkLower;
-    int offsetUpper = upper.blynkBrightness - defBlynkUpper;
+    // Weight is inverse to the distance. (You could tweak the exponent on the distance if desired.)
+    float weight = 1.0 / (distance + epsilon);
+    totalWeight += weight;
     
-    // Linear interpolation for the offset based on the lightread position between the two anchors:
-    float fraction = 0.0;
-    if (upper.lightread != lower.lightread)
-      fraction = float(lightread - lower.lightread) / float(upper.lightread - lower.lightread);
-    offset = offsetLower + (offsetUpper - offsetLower) * fraction;
+    // Compute the default Blynk brightness at the anchor's lightread.
+    int defBlynkAtAnchor = 255 - computeDefaultLED(anchors[i].lightread);
+    
+    // Anchor's offset: the difference between the user-set brightness and the default brightness at that anchor.
+    int anchorOffset = anchors[i].blynkBrightness - defBlynkAtAnchor;
+    
+    weightedOffsetSum += anchorOffset * weight;
   }
+
+  // Compute the weighted average offset.
+  int offset = round(weightedOffsetSum / totalWeight);
   
-  // Apply the computed offset to the default Blynk brightness:
+  // Adjust the default Blynk brightness using the computed offset.
   int calibratedBlynk = defaultBlynk + offset;
   
-  // Now invert back to get the LED brightness value:
+  // Convert back to LED brightness (remember, LED brightness is the inversion of Blynk brightness).
   int calibratedLED = 255 - calibratedBlynk;
   
-  // (Optionally, you can ensure calibratedLED stays within your allowed range.)
+  // Optionally, you could constrain calibratedLED here if you wish, or let it extend the range.
   return calibratedLED;
 }
+
 
 
 void setup() {
